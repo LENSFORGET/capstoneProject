@@ -1,0 +1,61 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Windows reserved names
+nul
+con
+prn
+aux
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# Node (root level)
+node_modules/
+
+# Build / cache
+.next/
+out/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs and temp
+*.log
+*.tmp
+.cache/
+
+# Docker (optional: uncomment if you don't want to track)
+# docker-compose.override.yml
+
+# Test and coverage
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/
+
+# Nested repo backups (restore with: mv .git.bak .git)
+/frontend/.git.bak/
+/capstone-nat-ui/.git.bak/
+
+# MinerU / data (large or generated)
+# Uncomment if you have large extracted outputs:
+# data/
+# output/

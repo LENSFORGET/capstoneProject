@@ -1,0 +1,343 @@
+version: "3.8"
+
+# -----------------------------------------------------------------------
+# NAT RAG 小红书保险系统 - Docker Compose
+# 服务：etcd + minio + milvus-standalone + app
+# -----------------------------------------------------------------------
+
+services:
+
+  # -----------------------------------------------------------------------
+  # 1. etcd - Milvus 元数据存储
+  # -----------------------------------------------------------------------
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.18
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - etcd_data:/etcd
+    command: >
+      etcd
+      --advertise-client-urls=http://127.0.0.1:2379
+      --listen-client-urls=http://0.0.0.0:2379
+      --data-dir=/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 2. minio - Milvus 对象存储
+  # -----------------------------------------------------------------------
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2024-05-01T01-11-10Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - minio_data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 3. milvus - 向量数据库 (standalone 模式)
+  # -----------------------------------------------------------------------
+  milvus:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.5.0
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - milvus_data:/var/lib/milvus
+    ports:
+      - "19530:19530"
+      # 9091 仅供容器内健康检查使用，不对外暴露（避免 Windows 端口权限问题）
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 60s
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 4. postgres - 小红书爬取数据结构化存储
+  # -----------------------------------------------------------------------
+  postgres:
+    container_name: xhs-postgres
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_DB: xhs_data
+      POSTGRES_USER: xhs_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-xhs_secure_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 容器启动时自动执行初始化 SQL
+      - ./xhs_db_init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xhs_user -d xhs_data"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 5. app - NAT 应用容器（爬虫 + RAG + 问答）
+  # -----------------------------------------------------------------------
+  app:
+    container_name: nat-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # NVIDIA API Key（GLM 5 + NVIDIA NIM embedding 共用）
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      # 小红书 Cookie（手动登录后粘贴，用于爬虫）
+      - XHS_COOKIES=${XHS_COOKIES:-}
+      # Milvus 连接配置
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      # PostgreSQL 连接配置（小红书爬取数据存储）
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=xhs_data
+      - POSTGRES_USER=xhs_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-xhs_secure_pass}
+    volumes:
+      # 持久化爬取的 JSON 数据、MinerU 输出和模型缓存
+      - app_data:/app/data
+    depends_on:
+      milvus:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    command: ["/bin/bash"]
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 6. ui - Gradio Web UI (稳定的原始界面)
+  # 访问地址：http://localhost:8080
+  # -----------------------------------------------------------------------
+  ui:
+    container_name: nat-ui
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=xhs_data
+      - POSTGRES_USER=xhs_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-xhs_secure_pass}
+    volumes:
+      - app_data:/app/data
+      - app_cache:/root/.cache
+      - ./ui.py:/app/ui.py:ro
+      - ./rag_ingest.py:/app/rag_ingest.py:ro
+    ports:
+      - "8080:7860"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      milvus:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: ["python", "ui.py"]
+    restart: unless-stopped
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 6. api - FastAPI 后端（保险问答 / 知识库管理 / 小红书数据）
+  # 访问地址：http://localhost:8000
+  # -----------------------------------------------------------------------
+  api:
+    container_name: nat-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=xhs_data
+      - POSTGRES_USER=xhs_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-xhs_secure_pass}
+      # 强制 watchfiles 使用轮询模式，避免 Windows Docker 挂载 I/O 错误
+      - WATCHFILES_FORCE_POLLING=true
+    volumes:
+      - app_data:/app/data
+      - app_cache:/root/.cache
+      - ./api.py:/app/api.py:ro
+      - ./rag_ingest.py:/app/rag_ingest.py:ro
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      milvus:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    restart: unless-stopped
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 8. frontend - Next.js 前端 (Pinecone Style SaaS UI)
+  # 访问地址：http://localhost:3000
+  # -----------------------------------------------------------------------
+  frontend:
+    container_name: nat-frontend
+    image: node:20-alpine
+    working_dir: /app/frontend
+    environment:
+      # 让 Next 把 /api 代理到 api 容器，避免浏览器直连导致 Network Error
+      - API_UPSTREAM=http://api:8000
+    volumes:
+      - ./frontend:/app/frontend
+    ports:
+      - "3000:3000"
+    command: ["sh", "-c", "npm install && npm run dev"]
+    restart: unless-stopped
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 8. xhs-login - 小红书手动登录助手（按需启动，不随 up 自动启动）
+  # 功能：启动 noVNC Web 图形界面，用户通过浏览器操作 Chromium 登录小红书
+  #       登录后会话保存至 app_data 卷的 /app/data/xhs_state.json
+  # 用法：
+  #   docker-compose --profile login up xhs-login --build
+  #   打开 http://localhost:6080 完成登录，按终端 Enter 保存会话
+  # -----------------------------------------------------------------------
+  xhs-login:
+    container_name: xhs-login
+    build:
+      context: .
+      dockerfile: Dockerfile.login
+    environment:
+      - DISPLAY=:99
+    volumes:
+      - app_data:/app/data
+      - ./xhs_login_helper.py:/app/xhs_login_helper.py:ro
+    ports:
+      - "6080:6080"
+    stdin_open: true
+    tty: true
+    networks:
+      - milvus-net
+    profiles:
+      - login
+
+  # -----------------------------------------------------------------------
+  # 7. test - 测试运行容器（按需使用，不随 up 自动启动）
+  # 用法：
+  #   docker-compose run --rm test                   # 运行单元+集成测试
+  #   docker-compose run --rm test pytest test_unit.py -v
+  #   docker-compose run --rm test pytest test_integration.py -v
+  #   docker-compose run --rm test pytest test_e2e.py -v  (需要 NVIDIA_API_KEY)
+  # -----------------------------------------------------------------------
+  test:
+    container_name: nat-test
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-nvapi-test-placeholder}
+      - XHS_COOKIES=${XHS_COOKIES:-}
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=xhs_data
+      - POSTGRES_USER=xhs_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-xhs_secure_pass}
+    volumes:
+      - app_data:/app/data
+      # 挂载测试文件（开发调试时热更新）
+      - ./test_unit.py:/app/test_unit.py:ro
+      - ./test_integration.py:/app/test_integration.py:ro
+      - ./test_e2e.py:/app/test_e2e.py:ro
+      - ./pytest.ini:/app/pytest.ini:ro
+    depends_on:
+      milvus:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    working_dir: /app
+    # 默认运行单元 + 集成测试（不调用 NVIDIA API）
+    command: ["pytest", "-v", "--tb=short", "test_unit.py", "test_integration.py"]
+    networks:
+      - milvus-net
+    profiles:
+      - test
+
+# -----------------------------------------------------------------------
+# 网络
+# -----------------------------------------------------------------------
+networks:
+  milvus-net:
+    driver: bridge
+
+# -----------------------------------------------------------------------
+# 数据卷（持久化）
+# -----------------------------------------------------------------------
+volumes:
+  etcd_data:
+    driver: local
+  minio_data:
+    driver: local
+  milvus_data:
+    driver: local
+  app_data:
+    driver: local
+  postgres_data:
+    driver: local
+  app_cache:
+    driver: local

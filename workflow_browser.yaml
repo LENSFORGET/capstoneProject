@@ -1,0 +1,26 @@
+function_groups:
+  browser:
+    _type: mcp_client
+    server:
+      transport: stdio
+      command: "python"
+      args: ["agent_browser_mcp.py"]
+
+llms:
+  glm:
+    _type: openai
+    model_name: z-ai/glm5
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key: $NVIDIA_API_KEY
+    temperature: 0.0
+    model_kwargs:
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: true
+
+workflow:
+  _type: react_agent
+  tool_names: [browser]
+  llm_name: glm
+  verbose: true
+  max_retries: 5

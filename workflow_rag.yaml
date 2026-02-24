@@ -1,0 +1,86 @@
+# -----------------------------------------------------------------------
+# 保险 RAG 问答 Workflow
+# 使用 NAT react_agent + rag_mcp（知识库检索）+ agent-browser（实时网页查询）
+# GLM 5 (via NVIDIA NIM) 综合两个信息源回答保险问题
+#
+# 运行方式：nat run workflow_rag.yaml
+# 依赖环境变量：
+#   NVIDIA_API_KEY  - NVIDIA API 密钥
+#   MILVUS_HOST     - Milvus 主机（默认 localhost，Docker 中为 milvus）
+#   MILVUS_PORT     - Milvus 端口（默认 19530）
+# -----------------------------------------------------------------------
+
+function_groups:
+  # RAG 知识库检索工具（rag_mcp.py - NAT MilvusRetriever + NVIDIA NIM embedding）
+  rag:
+    _type: mcp_client
+    server:
+      transport: stdio
+      command: "python"
+      args: ["rag_mcp.py"]
+
+  # 浏览器工具（agent_browser_mcp.py - 用于实时查询最新保险信息）
+  browser:
+    _type: mcp_client
+    server:
+      transport: stdio
+      command: "python"
+      args: ["agent_browser_mcp.py"]
+
+llms:
+  glm:
+    _type: openai
+    model_name: z-ai/glm5
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key: $NVIDIA_API_KEY
+    temperature: 0.2
+    model_kwargs:
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: true
+
+workflow:
+  _type: react_agent
+  tool_names: [rag, browser]
+  llm_name: glm
+  verbose: true
+  max_retries: 8
+  system_prompt: |
+    你是一位专业的保险顾问 AI，拥有两种信息获取能力：
+
+    ## 工具说明
+
+    ### 1. RAG 知识库工具（优先使用）
+    - `search_insurance(query)`: 在从小红书采集的保险内容知识库中检索相关信息
+    - `get_collection_stats()`: 查看知识库的当前状态和数据量
+
+    ### 2. 浏览器工具（知识库不足时补充使用）
+    - `navigate(url)`: 打开网页
+    - `snapshot()`: 获取页面内容快照
+    - `get_text(selector)`: 获取指定元素的文本
+    - `click(selector)`: 点击页面元素
+    - `type_text(selector, text)`: 在输入框中输入文字
+    - `press_key(key)`: 按键（如 Enter）
+
+    ## 回答策略
+
+    1. **先查知识库**：使用 `search_insurance` 检索已有保险内容
+    2. **评估结果**：如果知识库结果充分，直接基于结果回答
+    3. **实时补充**：如果知识库内容不足或用户需要最新信息，使用浏览器访问可信保险网站
+       - 推荐查询网站：https://www.xiaohongshu.com（搜索保险关键词）
+       - 或：https://baike.baidu.com（查询保险基础知识）
+    4. **综合回答**：整合知识库和实时信息，给出专业、准确的回答
+
+    ## 回答格式
+
+    - 用**中文**回答
+    - 结构清晰，使用标题和列表
+    - 引用来源（知识库内容 / 实时查询）
+    - 如涉及具体产品推荐，说明这仅供参考，建议用户咨询专业顾问
+
+    ## 特别注意
+    - 始终以用户利益为先，客观中立
+    - 复杂保险问题请提示用户寻求专业人士帮助
+    - 不要虚构不存在的保险产品或政策信息
+
+    请等待用户的问题，然后开始工作。
