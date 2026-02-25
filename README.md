@@ -22,7 +22,8 @@ Docker Compose（docker-compose.yml）
 │   ├── app         (nat-app)           NAT 核心容器（CLI 交互、爬虫、RAG 命令行）
 │   ├── api         (nat-api)           FastAPI 后端，端口 8000
 │   ├── ui          (nat-ui)            Gradio Web UI，端口 8080
-│   └── frontend    (nat-frontend)      Next.js 前端，端口 3000
+│   ├── frontend    (nat-frontend)      Next.js 前端，端口 3000
+│   └── nat-ui-toolkit (nat-ui-toolkit) NVIDIA NeMo Agent Toolkit UI，端口 3001
 │
 └── 按需服务（profiles）
     ├── xhs-login   (xhs-login)         小红书登录助手（noVNC），端口 6080
@@ -33,7 +34,8 @@ Docker Compose（docker-compose.yml）
 
 | 服务 | 地址 | 说明 |
 |------|------|------|
-| **Next.js 前端** | http://localhost:3000 | 主 Web 界面（Pinecone 风格 SaaS UI） |
+| **NAT UI Toolkit** | http://localhost:3001 | **NVIDIA 官方 Agent UI（推荐）** |
+| **Next.js 前端** | http://localhost:3000 | 自定义 Web 界面（知识库管理 / 小红书数据） |
 | **FastAPI 后端** | http://localhost:8000 | REST API（RAG 问答 / 知识库管理 / 小红书数据） |
 | **Gradio UI** | http://localhost:8080 | 备用 Web 界面（稳定原始界面） |
 | **小红书登录** | http://localhost:6080 | noVNC 浏览器界面（按需启动） |
@@ -434,3 +436,66 @@ A: 请确认 `.env` 文件中已设置有效的 `NVIDIA_API_KEY`，且执行了 
 
 **Q: 小红书采集时出现"安全限制 IP 存在风险，请切换可靠网络环境后重试 300012"**  
 A: 小红书检测到当前网络为风险 IP。建议：①关闭 VPN/代理；②使用家庭宽带或手机热点；③等待 30 分钟后重试。详见 [docs/xhs-login.md](docs/xhs-login.md)。
+
+---
+
+## NeMo Agent Toolkit UI 集成
+
+本项目已集成 [NVIDIA NeMo Agent Toolkit UI](https://github.com/NVIDIA/NeMo-Agent-Toolkit-UI) 作为推荐的聊天前端界面。
+
+### 功能特点
+
+- 🎨 现代响应式 UI（Light/Dark 主题）
+- 🔄 实时流式回答（OpenAI Chat Completions 兼容）
+- 💡 预设提示建议（保险相关常见问题）
+- 📝 对话历史持久化
+- 🔌 HTTP 和 WebSocket 双模式支持
+
+### 快速启动
+
+```bash
+# 1. 克隆并配置 NAT UI
+chmod +x setup_nat_ui.sh
+./setup_nat_ui.sh
+
+# 2. 启动所有服务（含 NAT UI）
+docker-compose up -d
+
+# 3. 访问 NAT UI
+open http://localhost:3001
+```
+
+### 架构说明
+
+```
+浏览器 (http://localhost:3001)
+  ↓
+NAT UI Proxy (port 3001)
+  ├── /api/* → FastAPI 后端 (http://api:8000)
+  │   ├── POST /chat/stream  → OpenAI 兼容流式 RAG 问答
+  │   ├── POST /chat         → OpenAI 兼容非流式 RAG 问答
+  │   └── ...其他 API 端点
+  └── 其他请求 → Next.js 内部服务
+```
+
+### API 兼容层
+
+后端 `api.py` 提供了 OpenAI Chat Completions 兼容端点，供 NAT UI 调用：
+
+| 端点 | 格式 | 说明 |
+|------|------|------|
+| `POST /chat/stream` | OpenAI SSE | 流式回答，自动注入 RAG 上下文 |
+| `POST /chat` | OpenAI JSON | 非流式回答，自动注入 RAG 上下文 |
+| `POST /api/chat` | 自定义格式 | 原有端点（支持多语言、知识库选择） |
+
+### 与原有前端的关系
+
+| 特性 | NAT UI Toolkit (3001) | 自定义前端 (3000) |
+|------|----------------------|------------------|
+| 聊天问答 | ✅ 推荐（NVIDIA 官方 UI） | ✅ 支持 |
+| 知识库管理 | ❌ 不支持 | ✅ 上传 PDF / 删除 / 摘要生成 |
+| 小红书数据 | ❌ 不支持 | ✅ 数据浏览 / 采集 / 报告 |
+| 主题切换 | ✅ Light/Dark | ❌ |
+| 流式中间步骤 | ✅ 支持 | ❌ |
+
+**建议**：日常保险问答使用 NAT UI Toolkit（端口 3001），知识库管理和小红书数据操作使用自定义前端（端口 3000）。
