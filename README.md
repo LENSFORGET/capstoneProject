@@ -35,7 +35,7 @@ python rag_ingest.py --include-xhs
 
 **管道二：小红书用户洞察（完全独立，不向 RAG 入库）**
 ```
-nat run workflow_scraper.yaml
+nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
   └─ GLM 5 理解用户发帖（不是简单提取）
        ├─ 分析用户需求、痛点、情感倾向
        ├─ 洞察活跃用户真实关注点
@@ -44,7 +44,7 @@ nat run workflow_scraper.yaml
 
 **管道三：RAG 保险问答**
 ```
-nat run workflow_rag.yaml
+nat run --config_file workflow_rag.yaml
   └─ GLM 5 调用工具：
        ├─ search_insurance()  → MilvusRetriever 检索 PDF 知识库
        └─ browser tools       → 实时查询最新信息（兜底补充）
@@ -125,10 +125,10 @@ docker-compose --profile login up xhs-login --build
 启动后：
 1. 用浏览器打开 **http://localhost:6080**
 2. 在网页中可以看到 Chromium 浏览器，手动完成小红书登录（扫码或账号密码）
-3. 确认登录成功后，回到终端按 **Enter**
+3. 确认登录成功后，**在另一终端**执行：`docker exec xhs-login touch /app/data/xhs_login_trigger`
 4. 会话自动保存至共享卷 `/app/data/xhs_state.json`
 
-> 会话有效期通常为 30 天，过期后重复此步骤即可，无需修改代码。
+> 详细步骤与常见问题见 [docs/xhs-login.md](docs/xhs-login.md)。会话有效期通常为 30 天，过期后重复此步骤即可。
 
 #### 5b. 运行爬虫（登录后每次使用）
 
@@ -137,7 +137,7 @@ docker-compose --profile login up xhs-login --build
 docker exec -it nat-app bash
 
 # 运行爬虫（NAT React Agent 自动加载登录态、采集帖子/用户/评论）
-nat run workflow_scraper.yaml
+nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
 ```
 
 爬虫会：
@@ -149,7 +149,7 @@ nat run workflow_scraper.yaml
 ### 第六步：启动 RAG 问答
 
 ```bash
-nat run workflow_rag.yaml
+nat run --config_file workflow_rag.yaml
 ```
 
 GLM 5 将等待你的问题，例如：
@@ -206,7 +206,7 @@ capstoneProject/
 docker exec -it nat-app bash
 
 # 重新爬取（覆盖旧 JSON）
-nat run workflow_scraper.yaml
+nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
 
 # 清空旧向量数据并重新入库
 python rag_ingest.py --clear
@@ -219,11 +219,11 @@ python rag_ingest.py --clear
 **Q: docker-compose up 后 milvus 服务一直不健康**
 A: Milvus Standalone 启动较慢，等待约 2-3 分钟后再检查。如果仍有问题，运行 `docker-compose logs milvus` 查看日志。
 
-**Q: nat run workflow_scraper.yaml 提示需要登录小红书 / state 文件不存在**
-A: 请先执行登录步骤：`docker-compose --profile login up xhs-login --build`，打开 http://localhost:6080 完成登录并按 Enter 保存会话，之后再运行爬虫。
+**Q: nat run --config_file workflow_scraper.yaml 提示需要登录小红书 / state 文件不存在**
+A: 请先执行登录步骤：`docker-compose --profile login up xhs-login --build`，打开 http://localhost:6080 完成登录后，在另一终端执行 `docker exec xhs-login touch /app/data/xhs_login_trigger` 保存会话，详见 [docs/xhs-login.md](docs/xhs-login.md)。
 
 **Q: rag_ingest.py 提示数据文件不存在**
-A: 请先运行 `nat run workflow_scraper.yaml` 完成爬取，再运行入库脚本。
+A: 请先运行 `nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"` 完成爬取，再运行入库脚本。
 
 **Q: RAG 回答时提示知识库未找到相关内容**
 A: 确认已完成入库步骤。可运行 `get_collection_stats()` 工具检查知识库状态。

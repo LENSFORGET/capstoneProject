@@ -3,7 +3,7 @@
 # 使用 NAT react_agent + rag_mcp（知识库检索）+ agent-browser（实时网页查询）
 # GLM 5 (via NVIDIA NIM) 综合两个信息源回答保险问题
 #
-# 运行方式：nat run workflow_rag.yaml
+# 运行方式：nat run --config_file workflow_rag.yaml
 # 依赖环境变量：
 #   NVIDIA_API_KEY  - NVIDIA API 密钥
 #   MILVUS_HOST     - Milvus 主机（默认 localhost，Docker 中为 milvus）
@@ -30,7 +30,7 @@ function_groups:
 llms:
   glm:
     _type: openai
-    model_name: z-ai/glm5
+    model_name: minimaxai/minimax-m2.1
     base_url: https://integrate.api.nvidia.com/v1
     api_key: $NVIDIA_API_KEY
     temperature: 0.2

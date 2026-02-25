@@ -19,7 +19,7 @@ xhs_login_helper.py
   3. 在网页中看到 Chromium 浏览器，手动完成小红书登录（扫码或账号密码）
   4. 确认登录成功（看到首页内容）后，回到此终端按 Enter
   5. 会话自动保存，之后可运行爬虫：
-     docker exec -it nat-app bash -c "nat run workflow_scraper.yaml"
+     docker exec -it nat-app bash -c "nat run --config_file workflow_scraper.yaml --input '请现在开始执行采集任务。'"
 """
 
 import os
@@ -181,7 +181,7 @@ def main() -> int:
     print("=" * 64)
     print(f"\n  会话文件: {STATE_PATH}")
     print("\n  现在可以运行爬虫（在另一个终端执行）：")
-    print("  docker exec -it nat-app bash -c 'nat run workflow_scraper.yaml'")
+    print('  docker exec -it nat-app bash -c "nat run --config_file workflow_scraper.yaml --input \'请现在开始执行采集任务。\'"')
     print()
 
     return 0

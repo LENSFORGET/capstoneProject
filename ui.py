@@ -7,9 +7,13 @@ import os
 import shutil
 import time
 from pathlib import Path
+import requests
 import gradio as gr
 from openai import OpenAI
 import rag_ingest as ri
+
+# 与 api 服务同网时使用；本地单独跑 ui 时可改为 http://localhost:8000/api
+XHS_API_BASE = os.environ.get("XHS_API_BASE", "http://api:8000/api")
 
 # ─── 环境配置 ─────────────────────────────────────────────────────────────────
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
@@ -38,6 +42,7 @@ TRANSLATIONS = {
         "kb_upload": "Upload PDF",
         "kb_ingest": "Start Ingest",
         "kb_refresh": "Refresh",
+        "kb_refresh_list": "Refresh List",
         "kb_status": "KB Status",
         "kb_docs": "Documents",
         "kb_delete": "Delete Selected",
@@ -52,6 +57,7 @@ TRANSLATIONS = {
         "kb_upload": "上傳 PDF",
         "kb_ingest": "開始入庫",
         "kb_refresh": "刷新狀態",
+        "kb_refresh_list": "刷新列表",
         "kb_status": "知識库狀態",
         "kb_docs": "已存檔文件",
         "kb_delete": "刪除所選",
@@ -66,6 +72,7 @@ TRANSLATIONS = {
         "kb_upload": "上传 PDF",
         "kb_ingest": "开始入库",
         "kb_refresh": "刷新状态",
+        "kb_refresh_list": "刷新列表",
         "kb_status": "知识库状态",
         "kb_docs": "已存档文件",
         "kb_delete": "删除所选",
@@ -239,6 +246,41 @@ def chat_stream(message, history, collection):
             full_resp += delta.content
             yield full_resp
 
+# ─── 小红书：登录态与采集（调用 api 服务）────────────────────────────────────────
+def fetch_xhs_login_status():
+    """请求 api 的 /api/xhs/login-status，返回可读文案。"""
+    try:
+        r = requests.get(f"{XHS_API_BASE}/xhs/login-status", timeout=10)
+        r.raise_for_status()
+        d = r.json()
+        if d.get("has_state_file"):
+            return (
+                f"✅ 已检测到登录态\n"
+                f"路径: {d.get('path', '')}\n"
+                f"大小: {d.get('size_bytes', 0)} bytes\n"
+                f"修改时间: {d.get('modified') or '-'}\n"
+                f"{d.get('hint', '')}"
+            )
+        return f"❌ 未检测到登录态\n{d.get('hint', '')}"
+    except requests.RequestException as e:
+        return f"⚠️ 无法连接 API：{e}\n请确认 api 服务已启动（如 docker-compose up api）。"
+    except Exception as e:
+        return f"⚠️ 错误：{e}"
+
+def run_xhs_scraper():
+    """请求 api 的 POST /api/xhs/run-scraper，返回结果文案。"""
+    try:
+        r = requests.post(f"{XHS_API_BASE}/xhs/run-scraper", timeout=10)
+        if r.status_code == 409:
+            return "⚠️ 采集任务正在运行中，请稍后再试。"
+        r.raise_for_status()
+        d = r.json()
+        return f"✅ {d.get('message', '采集已启动')}"
+    except requests.RequestException as e:
+        return f"⚠️ 请求失败：{e}\n请确认 api 服务已启动。"
+    except Exception as e:
+        return f"⚠️ 错误：{e}"
+
 # ─── UI 界面 ──────────────────────────────────────────────────────────────────
 
 with gr.Blocks(title="Insurance RAG") as demo:
@@ -299,6 +341,34 @@ with gr.Blocks(title="Insurance RAG") as demo:
             ingest_btn.click(upload_and_ingest, [file_upload, kb_selector, use_mineru, clear_first], log_output)
             doc_refresh.click(list_kb_documents, inputs=kb_selector, outputs=doc_list)
 
+        # 小红书采集 Tab
+        with gr.Tab("📱 小红书采集", id="xhs_tab") as xhs_tab:
+            gr.Markdown(
+                "**登录与采集状态**\n\n"
+                "1. 先运行：`docker-compose --profile login up xhs-login --build`\n"
+                "2. 在浏览器打开 **[http://localhost:6080](http://localhost:6080)** 完成小红书登录\n"
+                "3. 登录成功后，在**另一终端**执行：`docker exec xhs-login touch /app/data/xhs_login_trigger` 保存会话\n"
+                "4. 下方可刷新登录态、手动启动一次采集（需 api 服务已启动）。"
+            )
+            with gr.Row():
+                xhs_status = gr.Textbox(
+                    label="登录态状态",
+                    value="点击「刷新登录态」获取",
+                    lines=6,
+                    interactive=False,
+                )
+                xhs_refresh_btn = gr.Button("刷新登录态")
+            with gr.Row():
+                xhs_run_result = gr.Textbox(
+                    label="采集操作结果",
+                    value="",
+                    lines=2,
+                    interactive=False,
+                )
+                xhs_run_btn = gr.Button("手动启动采集", variant="primary")
+            xhs_refresh_btn.click(fetch_xhs_login_status, None, xhs_status)
+            xhs_run_btn.click(run_xhs_scraper, None, xhs_run_result)
+
     # Language Switcher
     def change_language(lang):
         t = TRANSLATIONS[lang]
@@ -315,7 +385,7 @@ with gr.Blocks(title="Insurance RAG") as demo:
             gr.update(label=t["kb_upload"]),
             gr.update(value=t["kb_ingest"]),
             gr.update(label=t["kb_docs"]),
-            gr.update(value=t["kb_refresh"]),
+            gr.update(value=t["kb_refresh_list"]),
         ]
 
     lang_radio.change(change_language, inputs=lang_radio, outputs=[

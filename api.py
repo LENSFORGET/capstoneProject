@@ -95,7 +95,7 @@ def generate_summary_with_glm(text: str) -> str:
     try:
         prompt = "Please summarize the core content of the following document in a concise paragraph (within 50 words) based on the text. If the text is Chinese, use Chinese. Text:\n" + text[:3000]
         resp = llm_client.chat.completions.create(
-            model="z-ai/glm5",
+            model="minimaxai/minimax-m2.1",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=1024,
@@ -226,14 +226,14 @@ async def chat_stream_api(req: ChatRequest):
     async def generate():
         try:
             stream = llm_client.chat.completions.create(
-                model="z-ai/glm5",
+                model="minimaxai/minimax-m2.1",
                 messages=api_messages,
                 temperature=0.2,
                 stream=True,
                 max_tokens=2048,
             )
             for chunk in stream:
-                if not chunk.choices:
+                if not getattr(chunk, "choices", None):
                     continue
                 delta = chunk.choices[0].delta.content or ""
                 if delta:
@@ -642,27 +642,49 @@ def _run_scraper_background():
     """在后台线程中执行 nat run workflow_scraper.yaml，结束后更新状态。"""
     _write_scraper_status({"running": True, "started_at": datetime.utcnow().isoformat() + "Z", "finished_at": None, "message": "采集已启动"})
     try:
-        proc = subprocess.run(
-            ["nat", "run", "workflow_scraper.yaml"],
-            cwd="/app",
-            env=os.environ.copy(),
-            capture_output=True,
-            text=True,
-            timeout=3600,
-        )
-        out = (proc.stdout or "") + (proc.stderr or "")
+        with open(_xhs_path("scraper_full_log.txt"), "w", encoding="utf-8") as f:
+            proc = subprocess.Popen(
+                ["nat", "run", "--config_file", "workflow_scraper.yaml", "--input", "请现在开始执行采集任务。"],
+                cwd="/app",
+                env=os.environ.copy(),
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            # 等待进程结束（带超时）
+            proc.wait(timeout=3600)
+        
+        # 结束后读取一下日志尾部用来更新状态
+        out = ""
+        try:
+            with open(_xhs_path("scraper_full_log.txt"), "r", encoding="utf-8") as f:
+                content = f.read()
+                out = content[-2000:] if content else ""
+        except Exception:
+            pass
+
         _write_scraper_status({
             "running": False,
             "started_at": _read_scraper_status().get("started_at"),
             "finished_at": datetime.utcnow().isoformat() + "Z",
             "message": "采集完成" if proc.returncode == 0 else f"采集异常退出 code={proc.returncode}",
             "returncode": proc.returncode,
-            "log_tail": out[-2000:] if out else None,
+            "log_tail": out,
         })
     except subprocess.TimeoutExpired:
         _write_scraper_status({"running": False, "started_at": _read_scraper_status().get("started_at"), "finished_at": datetime.utcnow().isoformat() + "Z", "message": "采集超时"})
     except Exception as e:
         _write_scraper_status({"running": False, "started_at": _read_scraper_status().get("started_at"), "finished_at": datetime.utcnow().isoformat() + "Z", "message": str(e)})
+    finally:
+        # 兜底清理：如果进程异常退出，确保把所有 running 状态置为 failed，避免前端卡死
+        try:
+            conn = _pg_conn()
+            with conn.cursor() as cur:
+                cur.execute("UPDATE xhs_search_sessions SET status='failed' WHERE status='running';")
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[xhs] failed to cleanup running sessions: {e}")
 
 @app.get("/api/xhs/login-status")
 def xhs_login_status():
@@ -816,7 +838,7 @@ def xhs_report(req: ReportRequest):
             )
         prompt = "以下是从小红书采集的保险相关帖子摘要。请用中文写一份简洁的分析报告（约 300–500 字），包含：1) 数据概览；2) 用户关注点与热点话题；3) 对保险产品/运营的简要建议。\n\n" + "\n\n---\n\n".join(posts_text[:50])
         resp = llm_client.chat.completions.create(
-            model="z-ai/glm5",
+            model="minimaxai/minimax-m2.1",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=2048,

@@ -9,7 +9,7 @@ function_groups:
 llms:
   glm:
     _type: openai
-    model_name: z-ai/glm5
+    model_name: minimaxai/minimax-m2.1
     base_url: https://integrate.api.nvidia.com/v1
     api_key: $NVIDIA_API_KEY
     temperature: 0.0

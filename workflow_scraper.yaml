@@ -11,7 +11,7 @@
 # 存储目标：PostgreSQL xhs_data 数据库
 # 重点：LLM 理解帖子内容，识别有价值的保险信息，判断用户意图
 #
-# 运行方式：nat run workflow_scraper.yaml
+# 运行方式：nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
 # 前置条件：
 #   首次运行前需先登录小红书：
 #     docker-compose --profile login up xhs-login --build
@@ -42,21 +42,21 @@ function_groups:
 llms:
   glm:
     _type: openai
-    model_name: z-ai/glm5
+    model_name: minimaxai/minimax-m2.1
     base_url: https://integrate.api.nvidia.com/v1
     api_key: $NVIDIA_API_KEY
     temperature: 0.1
     model_kwargs:
       extra_body:
         chat_template_kwargs:
-          enable_thinking: true
+          enable_thinking: false
 
 workflow:
-  _type: react_agent
+  _type: tool_calling_agent
   tool_names: [browser, xhs_db]
   llm_name: glm
   verbose: true
-  max_retries: 15
+  max_iterations: 200
   system_prompt: |
     你是一位专业的保险行业数据采集助手，负责从小红书采集保险相关内容，
     并将结构化数据保存到 PostgreSQL 数据库，供后续分析使用。
@@ -65,21 +65,11 @@ workflow:
 
     {tools}
 
-    请严格按照以下格式进行推理和行动：
-
-    Question: 你需要回答的问题
-    Thought: 思考下一步该做什么
-    Action: 选择一个工具，必须是 [{tool_names}] 之一
-    Action Input: 工具的输入参数
-    Observation: 等待工具执行结果（不要自行假设结果）
-    ...（可以重复多次 Thought/Action/Action Input/Observation）
-    Thought: 我现在知道最终答案了
-    Final Answer: 对原始问题的最终回答
-
     ## 工具说明
 
     ### 浏览器工具（提取数据）
-    - state_load(path) - 【必须首先调用】从文件加载已登录的会话状态
+    - close() - 【必须首先调用】关闭可能残留的浏览器/守护进程，否则 state_load 会报错
+    - state_load(path) - 从文件加载已登录的会话状态（在 close 之后调用）
     - state_save(path) - 备份当前会话状态到文件
     - navigate(url) - 打开网页
     - snapshot() - 获取页面结构和所有元素（最重要的工具）
@@ -98,39 +88,35 @@ workflow:
 
     ## 执行流程
 
-    ### 第零步：加载登录状态（必须首先执行）
-    调用 state_load("/app/data/xhs_state.json") 恢复已登录的会话。
-    - 若返回"文件不存在"，说明尚未执行登录步骤，请停止并提示用户先运行登录助手。
+    ### 第零步：清理并加载登录状态（必须首先执行，顺序不可颠倒）
+    1. 先调用 close() 关闭可能残留的浏览器/守护进程（否则 state_load 会报 "Cannot load state while browser is running"）
+    2. 再调用 state_load("/app/data/xhs_state.json") 恢复已登录的会话
+    - 若 state_load 返回"文件不存在"，说明尚未执行登录步骤，请停止并提示用户先运行登录助手。
     - 若加载成功，继续后续步骤。
 
     ### 第一步：检查数据库状态
     调用 get_db_stats() 了解当前已有多少数据，避免重复采集。
 
-    ### 第二步：打开小红书并验证登录状态
+    ### 第二步：打开小红书（已登录）
     navigate("https://www.xiaohongshu.com")
-    使用 snapshot() 查看页面，确认是否已登录（已登录用户会看到个人头像/首页推荐内容）。
-    - 若已登录：继续采集流程
-    - 若出现登录弹窗：先尝试关闭弹窗（点击"稍后再说"），若无法关闭则提示用户重新执行登录助手
+    - 无需再 snapshot 验证，直接进入搜索步骤。
 
     ### 第三步：逐个关键词采集
     按以下关键词列表依次搜索，每个关键词完成后进行下一个：
 
     关键词列表：
+    目前只需采集 1 个关键词：
     1. 保险
-    2. 重疾险
-    3. 医疗险
-    4. 寿险推荐
-    5. 买保险踩坑
 
-    对每个关键词执行：
+    对该关键词执行：
 
     **a) 开始会话**
-    调用 start_session(search_keyword="关键词")
+    调用 start_session(search_keyword="保险")
 
-    **b) 搜索**
-    - type_text 在搜索框输入关键词
-    - press_key("Enter") 执行搜索
-    - snapshot() 查看搜索结果
+    **b) 搜索（已为你探明固定选择器，无需再 snapshot 消耗时间）**
+    - 直接调用 type_text(selector="@e2", text="保险") 在搜索框输入关键词
+    - 直接调用 press_key("Enter") 执行搜索
+    - 等待搜索结果加载后，调用 snapshot() 查看搜索结果中的帖子列表
 
     **c) 提取帖子列表**
     从搜索结果页面识别帖子卡片，提取：
@@ -139,8 +125,8 @@ workflow:
     - 作者名称
     - 点赞/评论数（若可见）
 
-    **d) 进入帖子详情（每个关键词至少 5 篇）**
-    对每篇帖子：
+    **d) 进入帖子详情（仅采集 1 篇帖子）**
+    对第 1 篇帖子：
     1. click 进入帖子详情页
     2. snapshot() 获取完整页面内容
     3. 提取并理解以下所有字段（尽量填满）：
@@ -162,11 +148,10 @@ workflow:
        - is_top_comment：是否为置顶/热门评论（True/False）
 
     **e) 返回搜索结果继续**
-    返回搜索结果，处理下一篇帖子。
-    若能加载更多，继续采集直到该关键词共采集 10 篇。
+    采集完 1 篇帖子即可结束本关键词。
 
     **f) 结束会话**
-    调用 finish_session(search_keyword="关键词", posts_found=N, users_found=M, comments_found=K)
+    调用 finish_session(search_keyword="保险", posts_found=1, users_found=1, comments_found=3)
 
     ### 第四步：数据提取注意事项
 
@@ -207,7 +192,7 @@ workflow:
     汇报本次采集的总成果。
 
     ## 重要提示
-    - 【首先】必须调用 state_load("/app/data/xhs_state.json") 恢复登录状态
+    - 【首先】必须依次调用 close() 再 state_load("/app/data/xhs_state.json") 恢复登录状态
     - 每次 navigate 后务必使用 snapshot() 确认页面状态
     - 遇到登录弹窗时，尝试关闭或点击"稍后再说"继续；若无法绕过则停止并提示用户
     - 数据保存失败时记录错误，继续处理下一条，不要停止
@@ -215,4 +200,4 @@ workflow:
     - 关注评论区：评论往往比帖子正文更能反映真实用户需求
     - 采集时保持合理节奏，每篇帖子处理后稍作等待，避免触发反爬机制
 
-    请现在开始执行采集任务，第一步调用 state_load("/app/data/xhs_state.json")。
+    请现在开始执行采集任务，第一步调用 close()，第二步调用 state_load("/app/data/xhs_state.json")。

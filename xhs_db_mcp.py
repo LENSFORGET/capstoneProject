@@ -48,16 +48,40 @@ mcp = FastMCP("XHS Database")
 # 数据库连接
 # -----------------------------------------------------------------------
 
+def _default_postgres_host():
+    """在 Docker 中若未设置 POSTGRES_HOST，使用 postgres 服务名；否则 localhost。"""
+    if os.environ.get("POSTGRES_HOST"):
+        return os.environ.get("POSTGRES_HOST")
+    # Docker 环境下通常存在 /.dockerenv 或 /app/data
+    if os.path.exists("/.dockerenv") or os.path.exists("/app/data"):
+        return "postgres"
+    return "localhost"
+
+
 def _get_conn():
     """创建 PostgreSQL 连接。每次调用创建新连接（MCP 短生命周期，无需连接池）。"""
-    return psycopg2.connect(
-        host=os.environ.get("POSTGRES_HOST", "localhost"),
-        port=int(os.environ.get("POSTGRES_PORT", "5432")),
-        dbname=os.environ.get("POSTGRES_DB", "xhs_data"),
-        user=os.environ.get("POSTGRES_USER", "xhs_user"),
-        password=os.environ.get("POSTGRES_PASSWORD", "xhs_secure_pass"),
-        connect_timeout=10,
-    )
+    port = int(os.environ.get("POSTGRES_PORT", "5432"))
+    dbname = os.environ.get("POSTGRES_DB", "xhs_data")
+    user = os.environ.get("POSTGRES_USER", "xhs_user")
+    password = os.environ.get("POSTGRES_PASSWORD", "xhs_secure_pass")
+    hosts = [_default_postgres_host()]
+    # 若默认用 localhost 且可能处于 Docker，失败时尝试 postgres 服务名
+    if hosts[0] == "localhost" and (os.path.exists("/.dockerenv") or os.path.exists("/app/data")):
+        hosts.append("postgres")
+    err = None
+    for host in hosts:
+        try:
+            return psycopg2.connect(
+                host=host,
+                port=port,
+                dbname=dbname,
+                user=user,
+                password=password,
+                connect_timeout=10,
+            )
+        except psycopg2.OperationalError as e:
+            err = e
+    raise err
 
 
 def _safe_int(value, default: int = 0) -> int:

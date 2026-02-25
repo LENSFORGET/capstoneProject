@@ -13,6 +13,7 @@ agent_browser_mcp.py
 
 import platform
 import subprocess
+import time
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("Agent Browser")
@@ -33,6 +34,7 @@ def _run(args: list[str]) -> str:
             encoding="utf-8",
             check=False,
         )
+        time.sleep(3)  # 强制降速，避免触发大模型 429 Too Many Requests 限流
         return result.stdout + result.stderr
     except Exception as e:
         return f"Error: {e}"
@@ -55,6 +57,7 @@ def get_text(selector: str) -> str:
             encoding="utf-8",
             check=False,
         )
+        time.sleep(3)  # 强制降速，避免触发大模型 429 Too Many Requests 限流
         return result.stdout.strip()
     except Exception as e:
         return f"Error: {e}"
@@ -85,10 +88,25 @@ def snapshot() -> str:
 
 
 @mcp.tool()
+def close() -> str:
+    """关闭当前浏览器会话，清理可能残留的守护进程。必须在 state_load 之前调用，否则 state_load 会报错 'Cannot load state while browser is running'。"""
+    res = _run(["close"])
+    import os
+    import platform
+    import time
+    if platform.system() != "Windows":
+        os.system("pkill -f 'daemon.js|chrome|agent-browser' || true")
+        time.sleep(1)
+    return res
+
+
+@mcp.tool()
 def state_load(path: str = "/app/data/xhs_state.json") -> str:
     """
     从指定文件加载浏览器会话状态（cookies、localStorage 等）。
     在爬虫开始前调用，可恢复小红书的已登录状态，无需重新登录。
+
+    会自动先执行 close，确保无残留浏览器进程后再加载（agent-browser 要求如此）。
 
     Args:
         path: state JSON 文件路径，默认 /app/data/xhs_state.json
@@ -101,16 +119,15 @@ def state_load(path: str = "/app/data/xhs_state.json") -> str:
     if not os.path.exists(path):
         return f"[state_load] 文件不存在: {path}。请先运行 docker-compose --profile login up xhs-login 完成登录。"
     try:
-        # 必须与 state_save / navigate 等使用同一会话名，否则加载的 cookie 不会生效
-        result = subprocess.run(
-            [CMD, *_SESSION_ARGS, "state", "load", path],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-        )
-        output = result.stdout + result.stderr
-        return f"[state_load] {output.strip() or '会话状态已加载。'}"
+        # 必须先 close，否则 agent-browser 报错 "Cannot load state while browser is running"
+        close()
+        # 直接覆盖 session 文件，下次启动时自动加载
+        import shutil
+        session_dir = os.path.expanduser("~/.agent-browser/sessions")
+        os.makedirs(session_dir, exist_ok=True)
+        dest = os.path.join(session_dir, "xhs-default.json")
+        shutil.copy(path, dest)
+        return f"[state_load] 会话状态已成功复制并加载。"
     except Exception as e:
         return f"[state_load] Error: {e}"
 

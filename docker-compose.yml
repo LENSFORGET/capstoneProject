@@ -131,6 +131,12 @@ services:
     volumes:
       # 持久化爬取的 JSON 数据、MinerU 输出和模型缓存
       - app_data:/app/data
+      # 将脚本挂载入容器，让本地修改瞬间生效，无需 rebuild
+      - ./agent_browser_mcp.py:/app/agent_browser_mcp.py:ro
+      - ./xhs_db_mcp.py:/app/xhs_db_mcp.py:ro
+      - ./workflow_scraper.yaml:/app/workflow_scraper.yaml:ro
+      - ./workflow_rag.yaml:/app/workflow_rag.yaml:ro
+      - ./rag_mcp.py:/app/rag_mcp.py:ro
     depends_on:
       milvus:
         condition: service_healthy
@@ -209,6 +215,9 @@ services:
       - app_cache:/root/.cache
       - ./api.py:/app/api.py:ro
       - ./rag_ingest.py:/app/rag_ingest.py:ro
+      - ./agent_browser_mcp.py:/app/agent_browser_mcp.py:ro
+      - ./xhs_db_mcp.py:/app/xhs_db_mcp.py:ro
+      - ./workflow_scraper.yaml:/app/workflow_scraper.yaml:ro
     ports:
       - "8000:8000"
     deploy:
@@ -223,7 +232,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "65"]
     restart: unless-stopped
     networks:
       - milvus-net

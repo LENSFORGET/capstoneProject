@@ -37,7 +37,7 @@ python rag_ingest.py
 
 **Pipeline 2: Xiaohongshu User Insights (independent, NOT for RAG)**
 ```
-nat run workflow_scraper.yaml
+nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
   → GLM 5 analyzes posts (not just extraction)
   → PostgreSQL via xhs_db_mcp
   → /app/data/xhs_user_insights.md
@@ -45,7 +45,7 @@ nat run workflow_scraper.yaml
 
 **Pipeline 3: RAG Insurance Q&A**
 ```
-nat run workflow_rag.yaml
+nat run --config_file workflow_rag.yaml
   → GLM 5 calls tools:
     - search_insurance() → MilvusRetriever (PDF KB)
     - browser tools → Real-time web queries (fallback)
@@ -98,13 +98,13 @@ python rag_ingest.py --include-xhs
 
 ```bash
 # Run RAG Q&A workflow
-nat run workflow_rag.yaml
+nat run --config_file workflow_rag.yaml
 
 # Run Xiaohongshu scraper workflow
-nat run workflow_scraper.yaml
+nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
 
 # Run generic browser workflow
-nat run workflow_browser.yaml
+nat run --config_file workflow_browser.yaml
 ```
 
 ### Running Tests
