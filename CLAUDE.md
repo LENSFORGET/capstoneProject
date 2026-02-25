@@ -23,6 +23,7 @@ The system uses Docker Compose with the following services:
 | app | NAT application (workflows, MCP tools) | - |
 | api | FastAPI backend for chat & KB management | 8000 |
 | frontend | Next.js UI | 3000 |
+| nat-ui-toolkit | NVIDIA NeMo Agent Toolkit UI (recommended chat UI) | 3001 |
 | test | Test container (on-demand) | - |
 
 ### Two Data Pipelines

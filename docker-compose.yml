@@ -258,7 +258,44 @@ services:
       - milvus-net
 
   # -----------------------------------------------------------------------
-  # 8. xhs-login - 小红书手动登录助手（按需启动，不随 up 自动启动）
+  # 9. nat-ui-toolkit - NeMo Agent Toolkit UI (NVIDIA 官方前端)
+  # 访问地址：http://localhost:3001
+  # 前置条件：先运行 ./setup_nat_ui.sh 克隆并初始化 NAT UI
+  # -----------------------------------------------------------------------
+  nat-ui-toolkit:
+    container_name: nat-ui-toolkit
+    image: node:18-alpine
+    working_dir: /app
+    environment:
+      - NAT_BACKEND_URL=http://api:8000
+      - PORT=3001
+      - NEXT_INTERNAL_URL=http://localhost:3099
+      - HTTP_PUBLIC_PATH=/api
+      - WS_PUBLIC_PATH=/ws
+      - NEXT_PUBLIC_NAT_WORKFLOW=Insurance RAG Q&A
+      - NEXT_PUBLIC_NAT_GREETING_TITLE=保险智能问答系统
+      - NEXT_PUBLIC_NAT_GREETING_SUBTITLE=我是您的专业保险顾问 AI，请问有什么可以帮助您？
+      - NEXT_PUBLIC_NAT_INPUT_PLACEHOLDER=输入您的保险问题...
+      - NEXT_PUBLIC_NAT_WELCOME_MESSAGE_ON=false
+      - NEXT_PUBLIC_NAT_PROMPT_SUGGESTIONS_ON=true
+      - NEXT_PUBLIC_NAT_CHAT_HISTORY_DEFAULT_ON=true
+      - NEXT_PUBLIC_NAT_ENABLE_INTERMEDIATE_STEPS=false
+      - NEXT_PUBLIC_NAT_WEB_SOCKET_DEFAULT_ON=false
+      - NEXT_PUBLIC_NAT_ADDITIONAL_VIZ_DEFAULT_ON=false
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - ./capstone-nat-ui:/app
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+    command: ["sh", "-c", "npm install && npm run dev"]
+    restart: unless-stopped
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 10. xhs-login - 小红书手动登录助手（按需启动，不随 up 自动启动）
   # 功能：启动 noVNC Web 图形界面，用户通过浏览器操作 Chromium 登录小红书
   #       登录后会话保存至 app_data 卷的 /app/data/xhs_state.json
   # 用法：

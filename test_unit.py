@@ -602,3 +602,119 @@ class TestAgentBrowserSessionTools:
         assert "state" in args
         assert "load" in args
         assert str(state_file) in args
+
+
+# =============================================================================
+# OpenAI-Compatible API Endpoints 单元测试
+# =============================================================================
+class TestOpenAIChatEndpoints:
+    """测试 api.py 中为 NeMo Agent Toolkit UI 添加的 OpenAI 兼容端点。
+
+    使用 FastAPI TestClient，不依赖外部服务（通过 mock LLM 和 Milvus）。
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup_test_client(self):
+        """Set up TestClient with mocked dependencies."""
+        from unittest.mock import patch, MagicMock
+        import api as api_module
+
+        # Mock the LLM client
+        mock_llm = MagicMock()
+        self._mock_llm = mock_llm
+
+        # Mock NVIDIA_API_KEY to pass validation, and _search_knowledge_base to avoid Milvus
+        with patch.object(api_module, "llm_client", mock_llm), \
+             patch.object(api_module, "NVIDIA_API_KEY", "nvapi-real-key-for-test"), \
+             patch.object(api_module, "_search_knowledge_base", return_value=""):
+            from fastapi.testclient import TestClient
+            self.client = TestClient(api_module.app)
+            self._patches = [
+                patch.object(api_module, "llm_client", mock_llm),
+                patch.object(api_module, "NVIDIA_API_KEY", "nvapi-real-key-for-test"),
+                patch.object(api_module, "_search_knowledge_base", return_value=""),
+            ]
+            for p in self._patches:
+                p.start()
+            yield
+            for p in self._patches:
+                p.stop()
+
+    def test_chat_stream_endpoint_exists(self):
+        """POST /chat/stream 端点应当存在并接受 OpenAI 格式请求。"""
+        from unittest.mock import MagicMock
+
+        # Mock streaming response
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock()]
+        mock_chunk.choices[0].delta.content = "Hello"
+
+        mock_done = MagicMock()
+        mock_done.choices = [MagicMock()]
+        mock_done.choices[0].delta.content = ""
+
+        self._mock_llm.chat.completions.create.return_value = [mock_chunk, mock_done]
+
+        response = self.client.post("/chat/stream", json={
+            "messages": [{"role": "user", "content": "什么是保险？"}],
+            "model": "test-model",
+            "stream": True,
+        })
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers.get("content-type", "")
+
+    def test_chat_endpoint_exists(self):
+        """POST /chat 端点应当存在并返回 OpenAI 格式的响应。"""
+        from unittest.mock import MagicMock
+
+        # Mock non-streaming response
+        mock_resp = MagicMock()
+        mock_resp.choices = [MagicMock()]
+        mock_resp.choices[0].message.content = "保险是一种风险管理工具。"
+        self._mock_llm.chat.completions.create.return_value = mock_resp
+
+        response = self.client.post("/chat", json={
+            "messages": [{"role": "user", "content": "什么是保险？"}],
+            "model": "test-model",
+            "stream": False,
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "choices" in data
+        assert len(data["choices"]) > 0
+        assert data["choices"][0]["message"]["role"] == "assistant"
+        assert "保险" in data["choices"][0]["message"]["content"]
+
+    def test_chat_endpoint_empty_messages(self):
+        """POST /chat 应当对空消息列表返回 400 错误。"""
+        response = self.client.post("/chat", json={
+            "messages": [],
+            "model": "test-model",
+        })
+        assert response.status_code == 400
+
+    def test_chat_stream_empty_messages(self):
+        """POST /chat/stream 应当对空消息列表返回 400 错误。"""
+        response = self.client.post("/chat/stream", json={
+            "messages": [],
+            "model": "test-model",
+        })
+        assert response.status_code == 400
+
+    def test_chat_response_has_openai_structure(self):
+        """验证 /chat 响应符合 OpenAI Chat Completions 格式。"""
+        from unittest.mock import MagicMock
+
+        mock_resp = MagicMock()
+        mock_resp.choices = [MagicMock()]
+        mock_resp.choices[0].message.content = "Test response"
+        self._mock_llm.chat.completions.create.return_value = mock_resp
+
+        response = self.client.post("/chat", json={
+            "messages": [{"role": "user", "content": "test"}],
+        })
+        data = response.json()
+        assert "id" in data
+        assert data["id"].startswith("chatcmpl-")
+        assert data["object"] == "chat.completion"
+        assert data["choices"][0]["finish_reason"] == "stop"

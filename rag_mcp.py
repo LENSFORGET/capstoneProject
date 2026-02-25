@@ -150,7 +150,7 @@ async def search_insurance(query: str) -> str:
         return error_msg
 
     if not result.results:
-        return "知识库中未找到相关内容。请先运行爬虫采集数据（nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"），然后运行入库脚本（python rag_ingest.py）。"
+        return "知识库中未找到相关内容。请先运行爬虫采集数据（nat run --config_file workflow_scraper.yaml --input '请现在开始执行采集任务。'），然后运行入库脚本（python rag_ingest.py）。"
 
     # 格式化返回结果
     output_parts = [f"从保险知识库中检索到 {len(result.results)} 条相关内容：\n"]

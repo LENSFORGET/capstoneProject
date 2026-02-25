@@ -848,6 +848,171 @@ def xhs_report(req: ReportRequest):
     except Exception as exc:
         raise HTTPException(500, str(exc))
 
+# ─── OpenAI-Compatible Endpoints for NeMo Agent Toolkit UI ────────────────────
+# These endpoints follow the OpenAI Chat Completions API format that the
+# NeMo Agent Toolkit UI proxy expects (via /chat/stream and /chat routes).
+# The NAT UI sends: {"messages": [...], "model": "...", "stream": true/false}
+# and expects OpenAI-compatible responses.
+
+import uuid as _uuid
+
+@app.post("/chat/stream")
+async def nat_ui_chat_stream(request: Request):
+    """OpenAI-compatible streaming chat endpoint for NeMo Agent Toolkit UI.
+
+    Accepts: {"messages": [{"role": "user", "content": "..."}], "model": "...", "stream": true}
+    Returns: SSE stream with data: {"choices": [{"delta": {"content": "..."}}]} format.
+    """
+    body = await request.json()
+    messages = body.get("messages", [])
+    if not messages:
+        raise HTTPException(400, "No messages provided")
+
+    if not NVIDIA_API_KEY or NVIDIA_API_KEY.startswith("nvapi-test"):
+        raise HTTPException(400, "No valid NVIDIA_API_KEY configured.")
+
+    # Extract the last user message for RAG retrieval
+    user_msg = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            user_msg = msg.get("content", "")
+            break
+
+    # Perform RAG knowledge base search
+    context = _search_knowledge_base(user_msg, DEFAULT_KB)
+
+    # Build system prompt (insurance advisor)
+    system_prompt = (
+        "你是一位专业的保险顾问 AI，擅长解读保险条款和提供保险建议。\n"
+        "请根据提供的参考资料回答用户的保险问题。\n\n"
+        "要求：\n"
+        "- 结构清晰（适当使用标题和列表）\n"
+        "- 优先基于参考资料回答，并注明出处\n"
+        "- 不要虚构保险条款或数据\n"
+        "- 涉及产品推荐时，说明仅供参考，建议咨询专业顾问"
+    )
+
+    # Build API messages: inject system prompt and RAG context
+    api_messages = [{"role": "system", "content": system_prompt}]
+
+    # Add conversation history (skip last user message, we'll add it with context)
+    for msg in messages[:-1]:
+        api_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # Add user message with RAG context if available
+    if context and not context.startswith("[检索异常"):
+        user_content = f"以下是从保险知识库检索到的相关内容，请参考回答：\n\n{context}\n\n---\n\n{user_msg}"
+    else:
+        user_content = user_msg
+    api_messages.append({"role": "user", "content": user_content})
+
+    chat_id = f"chatcmpl-{_uuid.uuid4().hex[:12]}"
+
+    async def generate():
+        try:
+            stream = llm_client.chat.completions.create(
+                model="minimaxai/minimax-m2.1",
+                messages=api_messages,
+                temperature=body.get("temperature", 0.2),
+                stream=True,
+                max_tokens=body.get("max_tokens", 2048),
+            )
+            for chunk in stream:
+                if not getattr(chunk, "choices", None):
+                    continue
+                delta = chunk.choices[0].delta.content or ""
+                if delta:
+                    openai_chunk = {
+                        "id": chat_id,
+                        "object": "chat.completion.chunk",
+                        "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}],
+                    }
+                    yield f"data: {json.dumps(openai_chunk)}\n\n"
+            # Send final chunk with finish_reason
+            final_chunk = {
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            }
+            yield f"data: {json.dumps(final_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as exc:
+            error_chunk = {
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "choices": [{"index": 0, "delta": {"content": f"\n\n[Error: {exc}]"}, "finish_reason": "stop"}],
+            }
+            yield f"data: {json.dumps(error_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@app.post("/chat")
+async def nat_ui_chat(request: Request):
+    """OpenAI-compatible non-streaming chat endpoint for NeMo Agent Toolkit UI.
+
+    Accepts: {"messages": [{"role": "user", "content": "..."}], "model": "...", "stream": false}
+    Returns: {"choices": [{"message": {"role": "assistant", "content": "..."}}]}
+    """
+    body = await request.json()
+    messages = body.get("messages", [])
+    if not messages:
+        raise HTTPException(400, "No messages provided")
+
+    if not NVIDIA_API_KEY or NVIDIA_API_KEY.startswith("nvapi-test"):
+        raise HTTPException(400, "No valid NVIDIA_API_KEY configured.")
+
+    user_msg = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            user_msg = msg.get("content", "")
+            break
+
+    context = _search_knowledge_base(user_msg, DEFAULT_KB)
+
+    system_prompt = (
+        "你是一位专业的保险顾问 AI，擅长解读保险条款和提供保险建议。\n"
+        "请根据提供的参考资料回答用户的保险问题。\n\n"
+        "要求：\n"
+        "- 结构清晰（适当使用标题和列表）\n"
+        "- 优先基于参考资料回答，并注明出处\n"
+        "- 不要虚构保险条款或数据\n"
+        "- 涉及产品推荐时，说明仅供参考，建议咨询专业顾问"
+    )
+
+    api_messages = [{"role": "system", "content": system_prompt}]
+    for msg in messages[:-1]:
+        api_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    if context and not context.startswith("[检索异常"):
+        user_content = f"以下是从保险知识库检索到的相关内容，请参考回答：\n\n{context}\n\n---\n\n{user_msg}"
+    else:
+        user_content = user_msg
+    api_messages.append({"role": "user", "content": user_content})
+
+    try:
+        resp = llm_client.chat.completions.create(
+            model="minimaxai/minimax-m2.1",
+            messages=api_messages,
+            temperature=body.get("temperature", 0.2),
+            stream=False,
+            max_tokens=body.get("max_tokens", 2048),
+        )
+        content = resp.choices[0].message.content or ""
+        return {
+            "id": f"chatcmpl-{_uuid.uuid4().hex[:12]}",
+            "object": "chat.completion",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": "stop",
+            }],
+        }
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
