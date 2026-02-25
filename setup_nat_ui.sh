@@ -71,7 +71,14 @@ NAT_MAX_FILE_SIZE_STRING=10mb
 NEXT_TELEMETRY_DISABLED=1
 ENVEOF
 
-# ── 3. Install dependencies ──────────────────────────────────────────────────
+# ── 3. Copy custom prompt suggestions ─────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/nat-ui-config-promptSuggestions.json" ]; then
+    echo "[INFO] Copying prompt suggestions into NAT UI..."
+    cp "$SCRIPT_DIR/nat-ui-config-promptSuggestions.json" "$NAT_UI_DIR/promptSuggestions.json"
+fi
+
+# ── 4. Install dependencies ──────────────────────────────────────────────────
 echo "[INFO] Installing NAT UI dependencies..."
 cd "$NAT_UI_DIR"
 npm ci || npm install
