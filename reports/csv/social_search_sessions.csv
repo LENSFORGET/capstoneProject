@@ -1,0 +1,21 @@
+﻿id,session_id,platform,search_keyword,posts_found,users_found,comments_found,leads_found,comment_success_rate,comment_blocked_rate,login_required_count,status,notes,started_at,finished_at
+1,b9d23583-b250-42d2-a2ca-cd66369c7873,zhihu,香港保险,1,1,1,1,100.00,0.00,0,completed,wave1 smoke,2026-03-10 04:35:56.269944+00:00,2026-03-10 04:35:56.358314+00:00
+2,75195cf0-534c-47dc-9f4d-488272596b55,reddit,香港保险,1,1,1,1,100.00,0.00,0,completed,wave1 smoke,2026-03-10 04:35:56.394627+00:00,2026-03-10 04:35:56.552729+00:00
+3,4ee04861-921b-4343-a853-d0a164fabc8d,twitter,香港保险,1,1,1,1,100.00,0.00,0,completed,wave1 smoke,2026-03-10 04:35:56.583747+00:00,2026-03-10 04:35:56.701990+00:00
+4,5e97a1c5-9078-4992-a39d-a4934a1b46b5,bilibili,保险规划求助,1,1,1,1,100.00,0.00,0,completed,wave2 smoke with reusable session name,2026-03-10 04:36:44.451273+00:00,2026-03-10 04:36:44.545317+00:00
+5,7c6758db-ebb4-4b70-b52f-c87d9720753a,weibo,保险规划求助,1,1,1,1,100.00,0.00,0,completed,wave2 smoke with reusable session name,2026-03-10 04:36:44.588454+00:00,2026-03-10 04:36:44.711119+00:00
+6,c729e9f3-8306-4ddf-8e9b-cdb729a2be25,tieba,保险规划求助,1,1,1,1,100.00,0.00,0,completed,wave2 smoke with reusable session name,2026-03-10 04:36:44.725522+00:00,2026-03-10 04:36:44.851539+00:00
+7,e8574a34-750b-49ca-a288-ed8fcbed6a19,douyin,保险规划求助,1,1,1,1,100.00,0.00,0,completed,wave2 smoke with reusable session name,2026-03-10 04:36:44.866924+00:00,2026-03-10 04:36:44.974366+00:00
+8,41e5dddf-a901-4098-a6aa-203eee716acb,weibo,养老规划,0,0,0,0,0.00,0.00,0,completed,LOGIN_REQUIRED:微博会话未登录，检测到登录页面，无法访问搜索结果,2026-03-10 04:42:12.959483+00:00,2026-03-10 04:43:54.892062+00:00
+9,5a61a730-f1a5-464d-8aaf-e41db363a33a,tieba,保险规划求助,0,0,0,0,0.00,0.00,0,completed,COMMENT_BLOCKED:贴吧搜索结果不精确匹配关键词，点击帖子超时，页面仍停留在搜索结果页，无法访问详情页和评论区,2026-03-10 04:48:25.595693+00:00,2026-03-10 04:49:07.705557+00:00
+10,59110410-f76a-47be-9d12-b541a723c1aa,instagram,critical illness insurance,0,0,0,0,0.00,0.00,0,completed,LOGIN_REQUIRED:Instagram 会话未登录，检测到登录页面，无法访问搜索结果,2026-03-10 05:27:53.357959+00:00,2026-03-10 05:28:12.289329+00:00
+11,b57d6b28-511e-4d3e-adc7-fb4864898b62,linkedin,medical insurance hong kong,0,0,0,0,0.00,0.00,0,completed,LOGIN_REQUIRED:LinkedIn 会话未登录，检测到登录页面，无法访问搜索结果,2026-03-10 05:30:26.221873+00:00,2026-03-10 05:30:56.614149+00:00
+12,56d0291e-a639-4287-babc-4b400cf6ca5e,twitter,retirement planning hong kong,0,0,0,0,0.00,0.00,0,completed,LOGIN_REQUIRED:X 会话未登录，检测到登录页面，无法访问搜索结果,2026-03-10 05:39:52.918472+00:00,2026-03-10 05:41:02.816670+00:00
+13,e429b040-8229-4a73-95e6-b469fb9d0be6,douyin,香港保险,0,0,0,0,0.00,0.00,0,completed,COMMENT_BLOCKED:抖音搜索结果页无法点击具体内容，反爬拦截，无法访问详情页和评论区,2026-03-10 05:45:29.785786+00:00,2026-03-10 05:45:50.396055+00:00
+14,c2adb20b-b8cf-48a4-9324-4e4bcea58c40,instagram,critical illness insurance,0,0,0,0,0.00,0.00,0,completed,LOGIN_REQUIRED:Instagram 会话未登录，检测到登录页面，无法访问搜索结果,2026-03-10 05:46:47.145815+00:00,2026-03-10 05:47:15.700004+00:00
+15,3360b602-d4d0-4398-bc9b-bca00323e1da,linkedin,medical insurance hong kong,0,0,0,0,0.00,0.00,0,completed,LOGIN_REQUIRED:LinkedIn 会话未登录，检测到登录页面，无法访问搜索结果,2026-03-10 05:50:27.657717+00:00,2026-03-10 05:50:51.533861+00:00
+16,6a709337-09fd-4d33-a1b6-a4e43c44afab,douyin,香港保险,0,0,0,0,0.00,0.00,0,completed,COMMENT_BLOCKED:抖音首页无法点击具体内容，反爬拦截，无法访问详情页和评论区,2026-03-10 05:54:12.040161+00:00,2026-03-10 05:54:57.918125+00:00
+17,97e739c9-aaea-4e5d-b6c0-623ef4fc4d62,douyin,香港保险,0,0,0,0,0.00,0.00,0,completed,COMMENT_BLOCKED:抖音首页无法点击具体内容，反爬拦截，无法访问详情页和评论区,2026-03-10 05:58:18.720274+00:00,2026-03-10 05:58:39.930391+00:00
+18,9c19ba4e-3160-41ef-8c1b-96488c2b9be4,weibo,保险规划求助,0,0,0,0,0.00,0.00,0,completed,LOGIN_REQUIRED:微博会话未登录，检测到登录页面，无法访问搜索结果,2026-03-10 06:01:18.596776+00:00,2026-03-10 06:01:51.135298+00:00
+19,9338216b-7364-4fc5-a8f0-b4721ed4af1b,instagram,medical insurance hong kong,0,0,0,0,0.00,0.00,0,completed,LOGIN_REQUIRED:Instagram 会话未登录，检测到登录页面，无法访问搜索结果,2026-03-10 06:14:15.096346+00:00,2026-03-10 06:15:09.754708+00:00
+20,4b950a58-cad8-4ea0-9d23-2b3742925981,reddit,medical insurance hong kong,0,0,0,0,0.00,0.00,0,completed,COMMENT_BLOCKED:Reddit 搜索结果页无法点击具体内容，反爬拦截，无法访问详情页和评论区,2026-03-10 06:21:02.066917+00:00,2026-03-10 06:21:38.465726+00:00

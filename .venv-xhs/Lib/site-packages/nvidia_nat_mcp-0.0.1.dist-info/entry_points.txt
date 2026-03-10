@@ -1,0 +1,9 @@
+[nat.cli]
+mcp = nat.plugins.mcp.cli.commands:mcp_command
+
+[nat.components]
+nat_mcp = nat.plugins.mcp.register
+nat_mcp_auth = nat.plugins.mcp.auth.register
+
+[nat.front_ends]
+nat_mcp_server = nat.plugins.mcp.server.register_frontend

@@ -106,6 +106,6 @@ docker exec xhs-login touch /app/data/xhs_login_trigger
 
 - 在 **nat-app** 中运行爬虫：  
   `docker exec -it nat-app bash -c "nat run --config_file workflow_scraper.yaml --input '请现在开始执行采集任务。'"`
-- 在 **http://localhost:3000/xhs**（Next.js）或 **http://localhost:8080**（Gradio）的「小红书」相关页面可查看登录态状态、手动启动采集等。
+- 在 **http://localhost:4000/xhs**（Next.js，端口 4000 为 Windows 兼容）或 **http://localhost:8080**（Gradio）的「小红书」相关页面可查看登录态状态、手动启动采集等。
 
 会话通常有效约 30 天，过期后按本文档重新执行登录与保存即可。

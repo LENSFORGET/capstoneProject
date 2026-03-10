@@ -73,7 +73,7 @@ RUN pip install --no-cache-dir -e /app/packages/nvidia_nat_core \
     && pip install --no-cache-dir -e /app/packages/nvidia_nat_mcp \
     && pip install --no-cache-dir -e /app/packages/nvidia_nat_fastmcp \
     && pip install --no-cache-dir -e /app/packages/nvidia_nat_llama_index \
-    && uv pip install --system --no-deps -e /app/packages/nvidia_nat_langchain
+    && pip install --no-deps -e /app/packages/nvidia_nat_langchain
 
 # 安装 MCP、RAG、数据库及基础依赖
 RUN pip install --no-cache-dir \

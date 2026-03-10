@@ -111,7 +111,66 @@ CREATE TABLE IF NOT EXISTS xhs_search_sessions (
 );
 
 -- =============================================================================
--- 5. 知识库文档表（kb_documents）
+-- 5. 潜在客户线索表（leads）
+--    由 AI 助理识别、评分，供保险代理人跟进
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS leads (
+    id              SERIAL          PRIMARY KEY,
+    user_id         VARCHAR(100)    NOT NULL,              -- 小红书用户 ID
+    username        VARCHAR(200)    DEFAULT '',             -- 用户昵称
+    profile_url     TEXT            DEFAULT '',             -- 主页链接
+    lead_score      SMALLINT        DEFAULT 1 CHECK (lead_score BETWEEN 1 AND 5), -- 意向评分 1-5
+    lead_reason     TEXT            DEFAULT '',             -- 识别原因（AI 判断依据）
+    contact_hint    TEXT            DEFAULT '',             -- 联系线索（如"评论求推荐顾问"）
+    source_post_id  VARCHAR(150)    DEFAULT '',             -- 来源帖子 ID
+    source_keyword  VARCHAR(200)    DEFAULT '',             -- 触发的搜索关键词
+    insurance_interest TEXT[]       DEFAULT '{}',          -- 感兴趣的险种（如 重疾险、医疗险）
+    status          VARCHAR(20)     DEFAULT 'new',          -- new / reviewed / contacted / closed
+    notes           TEXT            DEFAULT '',             -- 人工备注（代理人填写）
+    discovered_at   TIMESTAMPTZ     DEFAULT NOW(),          -- 首次发现时间
+    last_updated_at TIMESTAMPTZ     DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_user_post ON leads (user_id, source_post_id);
+CREATE INDEX IF NOT EXISTS idx_leads_score      ON leads (lead_score DESC);
+CREATE INDEX IF NOT EXISTS idx_leads_status     ON leads (status);
+CREATE INDEX IF NOT EXISTS idx_leads_keyword    ON leads (source_keyword);
+CREATE INDEX IF NOT EXISTS idx_leads_discovered ON leads (discovered_at DESC);
+
+-- 多平台扩展字段（兼容旧库，默认保留 XHS 行为）
+ALTER TABLE IF EXISTS leads
+    ADD COLUMN IF NOT EXISTS platform VARCHAR(32) NOT NULL DEFAULT 'xhs',
+    ADD COLUMN IF NOT EXISTS source_type VARCHAR(32) NOT NULL DEFAULT 'post_comment',
+    ADD COLUMN IF NOT EXISTS source_url TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(255) NOT NULL DEFAULT '';
+
+UPDATE leads
+SET platform = 'xhs'
+WHERE platform IS NULL OR platform = '';
+
+-- 迁移到跨平台唯一性：platform + user_id + source_post_id
+DROP INDEX IF EXISTS idx_leads_user_post;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_platform_user_post
+    ON leads (platform, user_id, source_post_id);
+CREATE INDEX IF NOT EXISTS idx_leads_platform ON leads (platform, discovered_at DESC);
+
+-- =============================================================================
+-- 6. 点赞记录表（liked_posts）
+--    记录 AI 已点赞的帖子，避免重复点赞
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS liked_posts (
+    id              SERIAL          PRIMARY KEY,
+    post_id         VARCHAR(150)    UNIQUE NOT NULL,        -- 已点赞的帖子 ID
+    post_url        TEXT            DEFAULT '',             -- 帖子链接
+    post_title      TEXT            DEFAULT '',             -- 帖子标题（冗余记录）
+    liked_reason    TEXT            DEFAULT '',             -- 点赞原因（高质量内容等）
+    liked_at        TIMESTAMPTZ     DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_liked_posts_at ON liked_posts (liked_at DESC);
+
+-- =============================================================================
+-- 7. 知识库文档表（kb_documents）
 --    管理向量库中对应的文档信息、概述以及重命名
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS kb_documents (
@@ -128,7 +187,104 @@ CREATE TABLE IF NOT EXISTS kb_documents (
 CREATE INDEX IF NOT EXISTS idx_kb_docs_collection ON kb_documents (collection_name);
 
 -- =============================================================================
--- 6. 辅助视图：常用查询快捷方式
+-- 9. 多平台原始数据表（social_*）
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS social_users (
+    id              SERIAL          PRIMARY KEY,
+    platform        VARCHAR(32)     NOT NULL,
+    user_id         VARCHAR(150)    NOT NULL,
+    username        VARCHAR(255)    NOT NULL,
+    profile_url     TEXT            DEFAULT '',
+    bio             TEXT            DEFAULT '',
+    followers_count INTEGER         DEFAULT 0,
+    following_count INTEGER         DEFAULT 0,
+    posts_count     INTEGER         DEFAULT 0,
+    is_verified     BOOLEAN         DEFAULT FALSE,
+    extra           JSONB           DEFAULT '{}'::jsonb,
+    first_seen_at   TIMESTAMPTZ     DEFAULT NOW(),
+    last_updated_at TIMESTAMPTZ     DEFAULT NOW(),
+    UNIQUE(platform, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_users_platform ON social_users (platform, followers_count DESC);
+CREATE INDEX IF NOT EXISTS idx_social_users_name ON social_users (username);
+
+CREATE TABLE IF NOT EXISTS social_posts (
+    id              SERIAL          PRIMARY KEY,
+    platform        VARCHAR(32)     NOT NULL,
+    post_id         VARCHAR(200)    NOT NULL,
+    title           TEXT            DEFAULT '',
+    content         TEXT            DEFAULT '',
+    url             TEXT            DEFAULT '',
+    post_type       VARCHAR(32)     DEFAULT 'post',
+    cover_image_url TEXT            DEFAULT '',
+    likes_count     INTEGER         DEFAULT 0,
+    comments_count  INTEGER         DEFAULT 0,
+    collects_count  INTEGER         DEFAULT 0,
+    shares_count    INTEGER         DEFAULT 0,
+    author_id       VARCHAR(150)    DEFAULT '',
+    author_name     VARCHAR(255)    DEFAULT '',
+    tags            TEXT[]          DEFAULT '{}',
+    search_keyword  VARCHAR(255)    DEFAULT '',
+    published_at    TIMESTAMPTZ     DEFAULT NULL,
+    collected_at    TIMESTAMPTZ     DEFAULT NOW(),
+    last_updated_at TIMESTAMPTZ     DEFAULT NOW(),
+    extra           JSONB           DEFAULT '{}'::jsonb,
+    UNIQUE(platform, post_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_posts_platform ON social_posts (platform, collected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_social_posts_author ON social_posts (platform, author_id);
+CREATE INDEX IF NOT EXISTS idx_social_posts_keyword ON social_posts (platform, search_keyword);
+CREATE INDEX IF NOT EXISTS idx_social_posts_tags ON social_posts USING GIN (tags);
+CREATE INDEX IF NOT EXISTS idx_social_posts_fulltext
+    ON social_posts USING GIN (to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(content, '')));
+
+CREATE TABLE IF NOT EXISTS social_comments (
+    id              SERIAL          PRIMARY KEY,
+    platform        VARCHAR(32)     NOT NULL,
+    comment_id      VARCHAR(200)    NOT NULL,
+    post_id         VARCHAR(200)    NOT NULL,
+    author_id       VARCHAR(150)    DEFAULT '',
+    author_name     VARCHAR(255)    DEFAULT '',
+    content         TEXT            NOT NULL,
+    likes_count     INTEGER         DEFAULT 0,
+    is_top_comment  BOOLEAN         DEFAULT FALSE,
+    source_type     VARCHAR(32)     DEFAULT 'comment',
+    published_at    TIMESTAMPTZ     DEFAULT NULL,
+    collected_at    TIMESTAMPTZ     DEFAULT NOW(),
+    extra           JSONB           DEFAULT '{}'::jsonb,
+    UNIQUE(platform, comment_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_comments_platform_post
+    ON social_comments (platform, post_id, likes_count DESC);
+CREATE INDEX IF NOT EXISTS idx_social_comments_author ON social_comments (platform, author_id);
+
+CREATE TABLE IF NOT EXISTS social_search_sessions (
+    id                   SERIAL          PRIMARY KEY,
+    session_id           UUID            DEFAULT gen_random_uuid(),
+    platform             VARCHAR(32)     NOT NULL,
+    search_keyword       VARCHAR(255)    NOT NULL,
+    posts_found          INTEGER         DEFAULT 0,
+    users_found          INTEGER         DEFAULT 0,
+    comments_found       INTEGER         DEFAULT 0,
+    leads_found          INTEGER         DEFAULT 0,
+    comment_success_rate NUMERIC(6,2)    DEFAULT 0,
+    comment_blocked_rate NUMERIC(6,2)    DEFAULT 0,
+    login_required_count INTEGER         DEFAULT 0,
+    status               VARCHAR(20)     DEFAULT 'running',
+    notes                TEXT            DEFAULT '',
+    started_at           TIMESTAMPTZ     DEFAULT NOW(),
+    finished_at          TIMESTAMPTZ     DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_sessions_platform
+    ON social_search_sessions (platform, started_at DESC);
+
+-- =============================================================================
+-- 8. 辅助视图：常用查询快捷方式
 -- =============================================================================
 
 -- 热门保险帖子（按互动量排序）
@@ -175,10 +331,29 @@ FROM xhs_posts
 GROUP BY search_keyword
 ORDER BY total_posts DESC;
 
+-- 高意向潜在客户视图（评分 >= 4）
+CREATE OR REPLACE VIEW v_hot_leads AS
+SELECT
+    l.user_id,
+    l.username,
+    l.lead_score,
+    l.lead_reason,
+    l.contact_hint,
+    l.insurance_interest,
+    l.source_keyword,
+    p.title         AS source_post_title,
+    p.url           AS source_post_url,
+    l.status,
+    l.discovered_at
+FROM leads l
+LEFT JOIN xhs_posts p ON p.post_id = l.source_post_id
+WHERE l.lead_score >= 4
+ORDER BY l.lead_score DESC, l.discovered_at DESC;
+
 -- =============================================================================
 -- 初始化完成提示
 -- =============================================================================
 DO $$
 BEGIN
-    RAISE NOTICE '小红书数据库初始化完成：xhs_posts / xhs_users / xhs_comments / xhs_search_sessions';
+    RAISE NOTICE '数据库初始化完成：xhs_* + leads + liked_posts + social_* 多平台表';
 END $$;

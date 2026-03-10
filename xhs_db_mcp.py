@@ -17,7 +17,7 @@ xhs_db_mcp.py
 
 依赖环境变量：
   POSTGRES_HOST     - 数据库主机（默认 localhost，Docker 中为 postgres）
-  POSTGRES_PORT     - 端口（默认 5432）
+  POSTGRES_PORT     - 端口（Docker 默认 5432；本地非 Docker 且未设置时默认 15432）
   POSTGRES_DB       - 数据库名（默认 xhs_data）
   POSTGRES_USER     - 用户名（默认 xhs_user）
   POSTGRES_PASSWORD - 密码
@@ -58,9 +58,22 @@ def _default_postgres_host():
     return "localhost"
 
 
+def _default_postgres_port() -> int:
+    """本地非 Docker 且未设置 POSTGRES_PORT 时，默认使用 15432（避免与系统 5432 冲突）。"""
+    if os.environ.get("POSTGRES_PORT"):
+        try:
+            return int(os.environ.get("POSTGRES_PORT"))
+        except (ValueError, TypeError):
+            pass
+    # Docker 内默认 5432；本地（无 /.dockerenv）默认 15432
+    if os.path.exists("/.dockerenv") or os.path.exists("/app/data"):
+        return 5432
+    return 15432
+
+
 def _get_conn():
     """创建 PostgreSQL 连接。每次调用创建新连接（MCP 短生命周期，无需连接池）。"""
-    port = int(os.environ.get("POSTGRES_PORT", "5432"))
+    port = _default_postgres_port()
     dbname = os.environ.get("POSTGRES_DB", "xhs_data")
     user = os.environ.get("POSTGRES_USER", "xhs_user")
     password = os.environ.get("POSTGRES_PASSWORD", "xhs_secure_pass")
@@ -96,6 +109,19 @@ def _safe_str(value, max_len: int = None, default: str = "") -> str:
     """安全转换为字符串，可选截断。"""
     result = str(value).strip() if value else default
     return result[:max_len] if max_len and len(result) > max_len else result
+
+
+def _safe_json(value) -> dict:
+    """安全转换为 JSON 对象（dict）。"""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {"raw": value}
+        except Exception:
+            return {"raw": value}
+    return {}
 
 
 # -----------------------------------------------------------------------
@@ -187,6 +213,88 @@ def finish_session(
         )
     except Exception as exc:
         logger.error("finish_session 失败：%s", exc)
+        return f"错误：{exc}"
+
+
+# -----------------------------------------------------------------------
+# MCP 工具：多平台搜索会话管理
+# -----------------------------------------------------------------------
+
+@mcp.tool()
+def start_social_session(platform: str, search_keyword: str) -> str:
+    """开始一次多平台采集会话。"""
+    if not platform:
+        return "错误：platform 不能为空。"
+    try:
+        conn = _get_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO social_search_sessions (platform, search_keyword, status)
+                VALUES (%s, %s, 'running')
+                RETURNING session_id::text, id
+                """,
+                (_safe_str(platform, 32), _safe_str(search_keyword, 255)),
+            )
+            row = cur.fetchone()
+        conn.close()
+        return f"多平台会话已创建。platform={platform}, session_id={row[0]}（数据库 id={row[1]}）"
+    except Exception as exc:
+        logger.error("start_social_session 失败：%s", exc)
+        return f"错误：{exc}"
+
+
+@mcp.tool()
+def finish_social_session(
+    platform: str,
+    search_keyword: str,
+    posts_found: int,
+    users_found: int = 0,
+    comments_found: int = 0,
+    leads_found: int = 0,
+    comment_success_rate: float = 0,
+    comment_blocked_rate: float = 0,
+    login_required_count: int = 0,
+    notes: str = "",
+) -> str:
+    """结束一次多平台采集会话并记录结构化指标。"""
+    try:
+        conn = _get_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE social_search_sessions
+                SET
+                    status               = 'completed',
+                    posts_found          = %s,
+                    users_found          = %s,
+                    comments_found       = %s,
+                    leads_found          = %s,
+                    comment_success_rate = %s,
+                    comment_blocked_rate = %s,
+                    login_required_count = %s,
+                    notes                = %s,
+                    finished_at          = NOW()
+                WHERE platform = %s AND search_keyword = %s AND status = 'running'
+                """,
+                (
+                    _safe_int(posts_found),
+                    _safe_int(users_found),
+                    _safe_int(comments_found),
+                    _safe_int(leads_found),
+                    float(comment_success_rate or 0),
+                    float(comment_blocked_rate or 0),
+                    _safe_int(login_required_count),
+                    _safe_str(notes, 2000),
+                    _safe_str(platform, 32),
+                    _safe_str(search_keyword, 255),
+                ),
+            )
+            updated = cur.rowcount
+        conn.close()
+        return f"多平台会话结束。platform={platform}，已更新 {updated} 条记录。"
+    except Exception as exc:
+        logger.error("finish_social_session 失败：%s", exc)
         return f"错误：{exc}"
 
 
@@ -412,6 +520,196 @@ def save_comment(
         return f"错误：{exc}"
 
 
+@mcp.tool()
+def save_social_user(
+    platform: str,
+    user_id: str,
+    username: str,
+    profile_url: str = "",
+    bio: str = "",
+    followers_count: int = 0,
+    following_count: int = 0,
+    posts_count: int = 0,
+    is_verified: bool = False,
+    extra: str = "",
+) -> str:
+    """保存或更新多平台用户。"""
+    if not platform or not user_id:
+        return "错误：platform 和 user_id 不能为空。"
+    try:
+        conn = _get_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO social_users (
+                    platform, user_id, username, profile_url, bio,
+                    followers_count, following_count, posts_count, is_verified, extra
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (platform, user_id) DO UPDATE SET
+                    username        = EXCLUDED.username,
+                    profile_url     = EXCLUDED.profile_url,
+                    bio             = EXCLUDED.bio,
+                    followers_count = EXCLUDED.followers_count,
+                    following_count = EXCLUDED.following_count,
+                    posts_count     = EXCLUDED.posts_count,
+                    is_verified     = EXCLUDED.is_verified,
+                    extra           = EXCLUDED.extra,
+                    last_updated_at = NOW()
+                RETURNING id
+                """,
+                (
+                    _safe_str(platform, 32),
+                    _safe_str(user_id, 150),
+                    _safe_str(username, 255),
+                    _safe_str(profile_url),
+                    _safe_str(bio),
+                    _safe_int(followers_count),
+                    _safe_int(following_count),
+                    _safe_int(posts_count),
+                    bool(is_verified),
+                    psycopg2.extras.Json(_safe_json(extra)),
+                ),
+            )
+            db_id = cur.fetchone()[0]
+        conn.close()
+        return f"多平台用户已保存。platform={platform}, user_id={user_id}, id={db_id}"
+    except Exception as exc:
+        logger.error("save_social_user 失败：%s", exc)
+        return f"错误：{exc}"
+
+
+@mcp.tool()
+def save_social_post(
+    platform: str,
+    post_id: str,
+    title: str = "",
+    content: str = "",
+    url: str = "",
+    author_name: str = "",
+    author_id: str = "",
+    likes_count: int = 0,
+    comments_count: int = 0,
+    collects_count: int = 0,
+    shares_count: int = 0,
+    tags: str = "",
+    search_keyword: str = "",
+    cover_image_url: str = "",
+    post_type: str = "post",
+    extra: str = "",
+) -> str:
+    """保存或更新多平台帖子。"""
+    if not platform or not post_id:
+        return "错误：platform 和 post_id 不能为空。"
+    tags_list = [t.strip().lstrip("#") for t in tags.split(",") if t.strip()] if tags else []
+    try:
+        conn = _get_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO social_posts (
+                    platform, post_id, title, content, url, post_type, cover_image_url,
+                    likes_count, comments_count, collects_count, shares_count,
+                    author_id, author_name, tags, search_keyword, extra
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s
+                )
+                ON CONFLICT (platform, post_id) DO UPDATE SET
+                    title           = EXCLUDED.title,
+                    content         = EXCLUDED.content,
+                    likes_count     = EXCLUDED.likes_count,
+                    comments_count  = EXCLUDED.comments_count,
+                    collects_count  = EXCLUDED.collects_count,
+                    shares_count    = EXCLUDED.shares_count,
+                    author_id       = EXCLUDED.author_id,
+                    author_name     = EXCLUDED.author_name,
+                    tags            = EXCLUDED.tags,
+                    search_keyword  = EXCLUDED.search_keyword,
+                    extra           = EXCLUDED.extra,
+                    last_updated_at = NOW()
+                RETURNING id
+                """,
+                (
+                    _safe_str(platform, 32),
+                    _safe_str(post_id, 200),
+                    _safe_str(title),
+                    _safe_str(content),
+                    _safe_str(url),
+                    _safe_str(post_type, 32),
+                    _safe_str(cover_image_url),
+                    _safe_int(likes_count),
+                    _safe_int(comments_count),
+                    _safe_int(collects_count),
+                    _safe_int(shares_count),
+                    _safe_str(author_id, 150),
+                    _safe_str(author_name, 255),
+                    tags_list,
+                    _safe_str(search_keyword, 255),
+                    psycopg2.extras.Json(_safe_json(extra)),
+                ),
+            )
+            db_id = cur.fetchone()[0]
+        conn.close()
+        return f"多平台帖子已保存。platform={platform}, post_id={post_id}, id={db_id}"
+    except Exception as exc:
+        logger.error("save_social_post 失败：%s", exc)
+        return f"错误：{exc}"
+
+
+@mcp.tool()
+def save_social_comment(
+    platform: str,
+    comment_id: str,
+    post_id: str,
+    content: str,
+    author_name: str = "",
+    author_id: str = "",
+    likes_count: int = 0,
+    is_top_comment: bool = False,
+    source_type: str = "comment",
+    extra: str = "",
+) -> str:
+    """保存或更新多平台评论。"""
+    if not platform or not comment_id or not post_id:
+        return "错误：platform/comment_id/post_id 不能为空。"
+    try:
+        conn = _get_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO social_comments (
+                    platform, comment_id, post_id, author_id, author_name,
+                    content, likes_count, is_top_comment, source_type, extra
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (platform, comment_id) DO UPDATE SET
+                    likes_count    = EXCLUDED.likes_count,
+                    is_top_comment = EXCLUDED.is_top_comment,
+                    source_type    = EXCLUDED.source_type,
+                    extra          = EXCLUDED.extra
+                RETURNING id
+                """,
+                (
+                    _safe_str(platform, 32),
+                    _safe_str(comment_id, 200),
+                    _safe_str(post_id, 200),
+                    _safe_str(author_id, 150),
+                    _safe_str(author_name, 255),
+                    _safe_str(content),
+                    _safe_int(likes_count),
+                    bool(is_top_comment),
+                    _safe_str(source_type, 32),
+                    psycopg2.extras.Json(_safe_json(extra)),
+                ),
+            )
+            db_id = cur.fetchone()[0]
+        conn.close()
+        return f"多平台评论已保存。platform={platform}, comment_id={comment_id}, id={db_id}"
+    except Exception as exc:
+        logger.error("save_social_comment 失败：%s", exc)
+        return f"错误：{exc}"
+
+
 # -----------------------------------------------------------------------
 # MCP 工具：查询数据
 # -----------------------------------------------------------------------
@@ -601,6 +899,18 @@ def get_db_stats() -> str:
             avg_likes = cur.fetchone()[0]
             stats["avg_likes"] = round(float(avg_likes), 1) if avg_likes else 0
 
+            cur.execute("SELECT COUNT(*) FROM social_posts")
+            stats["social_posts"] = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(*) FROM social_users")
+            stats["social_users"] = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(*) FROM social_comments")
+            stats["social_comments"] = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(*) FROM social_search_sessions")
+            stats["social_sessions"] = cur.fetchone()[0]
+
         conn.close()
 
         return (
@@ -613,10 +923,261 @@ def get_db_stats() -> str:
             f"帖子平均点赞：{stats['avg_likes']}\n"
             f"\n关键词分布：\n"
             + "\n".join(f"  {kw}：{cnt} 条" for kw, cnt in stats["keyword_distribution"].items())
+            + (
+                f"\n\n=== 多平台原始数据统计 ===\n"
+                f"social_posts：{stats['social_posts']:,}\n"
+                f"social_users：{stats['social_users']:,}\n"
+                f"social_comments：{stats['social_comments']:,}\n"
+                f"social_sessions：{stats['social_sessions']:,}"
+            )
         )
     except Exception as exc:
         logger.error("get_db_stats 失败：%s", exc)
         return f"查询失败：{exc}。请确认 PostgreSQL 服务已启动。"
+
+
+@mcp.tool()
+def save_lead(
+    user_id: str,
+    username: str,
+    lead_score: int,
+    lead_reason: str,
+    source_post_id: str = "",
+    source_keyword: str = "",
+    profile_url: str = "",
+    contact_hint: str = "",
+    insurance_interest: str = "",
+    platform: str = "xhs",
+    source_type: str = "post_comment",
+    source_url: str = "",
+    dedup_key: str = "",
+) -> str:
+    """
+    保存一条潜在客户线索到 leads 表。
+    由 AI 助理在识别出有保险需求的用户后调用。
+
+    Args:
+        user_id: 小红书用户唯一 ID
+        username: 用户昵称
+        lead_score: 意向评分 1-5（5=主动求推荐保险顾问，4=提到人生大事/明确需求，
+                    3=讨论理财/储蓄，2=关注保险内容，1=泛泛浏览）
+        lead_reason: AI 判断依据，如"在评论中询问香港重疾险推荐"
+        source_post_id: 发现该用户的来源帖子 ID
+        source_keyword: 触发该次搜索的关键词
+        profile_url: 用户主页链接
+        contact_hint: 联系线索，如"评论中留了微信/求私信"
+        insurance_interest: 感兴趣的险种，逗号分隔，如"重疾险,医疗险"
+    """
+    if not user_id or not username:
+        return "错误：user_id 和 username 不能为空。"
+    score = max(1, min(5, _safe_int(lead_score, 1)))
+    interests = [t.strip() for t in insurance_interest.split(",") if t.strip()] if insurance_interest else []
+
+    try:
+        conn = _get_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO leads (
+                    user_id, username, profile_url, lead_score, lead_reason,
+                    contact_hint, source_post_id, source_keyword, insurance_interest,
+                    platform, source_type, source_url, dedup_key
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (platform, user_id, source_post_id) DO UPDATE SET
+                    lead_score         = GREATEST(leads.lead_score, EXCLUDED.lead_score),
+                    lead_reason        = EXCLUDED.lead_reason,
+                    contact_hint       = EXCLUDED.contact_hint,
+                    insurance_interest = EXCLUDED.insurance_interest,
+                    source_type        = EXCLUDED.source_type,
+                    source_url         = EXCLUDED.source_url,
+                    dedup_key          = EXCLUDED.dedup_key,
+                    last_updated_at    = NOW()
+                RETURNING id, lead_score
+                """,
+                (
+                    _safe_str(user_id, 100),
+                    _safe_str(username, 200),
+                    _safe_str(profile_url),
+                    score,
+                    _safe_str(lead_reason),
+                    _safe_str(contact_hint),
+                    _safe_str(source_post_id, 150),
+                    _safe_str(source_keyword, 200),
+                    interests,
+                    _safe_str(platform, 32),
+                    _safe_str(source_type, 32),
+                    _safe_str(source_url),
+                    _safe_str(dedup_key, 255),
+                ),
+            )
+            row = cur.fetchone()
+            db_id, final_score = row[0], row[1]
+        conn.close()
+        logger.info("保存潜在客户：%s（%s）评分=%d", username, user_id, final_score)
+        return f"潜在客户已记录。user_id={user_id}, username={username}, 评分={final_score}/5, 数据库 id={db_id}"
+    except Exception as exc:
+        logger.error("save_lead 失败：%s", exc)
+        return f"错误：{exc}"
+
+
+@mcp.tool()
+def save_social_lead(
+    platform: str,
+    user_id: str,
+    username: str,
+    lead_score: int,
+    lead_reason: str,
+    source_post_id: str = "",
+    source_keyword: str = "",
+    profile_url: str = "",
+    contact_hint: str = "",
+    insurance_interest: str = "",
+    source_type: str = "post_comment",
+    source_url: str = "",
+    dedup_key: str = "",
+) -> str:
+    """多平台 lead 写入包装器（复用 save_lead）。"""
+    return save_lead(
+        user_id=user_id,
+        username=username,
+        lead_score=lead_score,
+        lead_reason=lead_reason,
+        source_post_id=source_post_id,
+        source_keyword=source_keyword,
+        profile_url=profile_url,
+        contact_hint=contact_hint,
+        insurance_interest=insurance_interest,
+        platform=platform,
+        source_type=source_type,
+        source_url=source_url,
+        dedup_key=dedup_key,
+    )
+
+
+@mcp.tool()
+def save_liked_post(
+    post_id: str,
+    post_url: str = "",
+    post_title: str = "",
+    liked_reason: str = "",
+) -> str:
+    """
+    记录一条已点赞的帖子，防止重复点赞。
+    在成功执行点赞操作后立即调用。
+
+    Args:
+        post_id: 帖子唯一 ID
+        post_url: 帖子链接
+        post_title: 帖子标题
+        liked_reason: 点赞原因，如"高质量保险科普内容，互动率高"
+    """
+    if not post_id:
+        return "错误：post_id 不能为空。"
+    try:
+        conn = _get_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO liked_posts (post_id, post_url, post_title, liked_reason)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (post_id) DO NOTHING
+                RETURNING id
+                """,
+                (
+                    _safe_str(post_id, 150),
+                    _safe_str(post_url),
+                    _safe_str(post_title),
+                    _safe_str(liked_reason),
+                ),
+            )
+            row = cur.fetchone()
+        conn.close()
+        if row:
+            logger.info("记录点赞帖子：%s", post_id)
+            return f"点赞记录已保存。post_id={post_id}"
+        else:
+            return f"该帖子已在点赞记录中（之前已点赞）。post_id={post_id}"
+    except Exception as exc:
+        logger.error("save_liked_post 失败：%s", exc)
+        return f"错误：{exc}"
+
+
+@mcp.tool()
+def check_already_liked(post_id: str) -> str:
+    """
+    检查某帖子是否已被点赞过，避免重复操作。
+
+    Args:
+        post_id: 帖子唯一 ID
+
+    Returns:
+        "已点赞" 或 "未点赞"
+    """
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM liked_posts WHERE post_id = %s", (_safe_str(post_id, 150),))
+            exists = cur.fetchone() is not None
+        conn.close()
+        return "已点赞" if exists else "未点赞"
+    except Exception as exc:
+        return f"查询失败：{exc}"
+
+
+@mcp.tool()
+def get_leads(
+    min_score: int = 1,
+    status: str = "new",
+    limit: int = 20,
+) -> str:
+    """
+    查询潜在客户列表，供保险代理人查看和跟进。
+
+    Args:
+        min_score: 最低意向评分（1-5，默认1=全部）
+        status: 状态筛选（new/reviewed/contacted，默认 new）
+        limit: 返回条数上限（默认 20）
+    """
+    try:
+        conn = _get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT l.platform, l.user_id, l.username, l.lead_score, l.lead_reason,
+                       l.contact_hint, l.insurance_interest, l.source_keyword,
+                       l.profile_url, l.status, l.discovered_at::date AS date,
+                       COALESCE(xp.title, sp.title, '') AS source_post_title
+                FROM leads l
+                LEFT JOIN xhs_posts xp ON l.platform = 'xhs' AND xp.post_id = l.source_post_id
+                LEFT JOIN social_posts sp ON sp.platform = l.platform AND sp.post_id = l.source_post_id
+                WHERE l.lead_score >= %s AND (%s = '' OR l.status = %s)
+                ORDER BY l.lead_score DESC, l.discovered_at DESC
+                LIMIT %s
+                """,
+                (max(1, min_score), status, status, min(limit, 100)),
+            )
+            rows = cur.fetchall()
+        conn.close()
+
+        if not rows:
+            return f"暂无符合条件的潜在客户（评分>={min_score}, 状态={status}）。"
+
+        lines = [f"=== 潜在客户列表（{len(rows)} 条，评分>={min_score}，状态={status}）===\n"]
+        for i, r in enumerate(rows, 1):
+            interests = ", ".join(r["insurance_interest"]) if r["insurance_interest"] else "未知"
+            lines.append(
+                f"{i}. ⭐{'★' * r['lead_score']} [{r['lead_score']}/5] {r['username']}\n"
+                f"   平台: {r['platform']}\n"
+                f"   原因: {r['lead_reason']}\n"
+                f"   险种兴趣: {interests} | 关键词: {r['source_keyword']}\n"
+                f"   联系线索: {r['contact_hint'] or '无'}\n"
+                f"   来源帖: {r['source_post_title'] or r['source_keyword']}\n"
+                f"   主页: {r['profile_url'] or '未知'} | 发现日期: {r['date']}\n"
+            )
+        return "\n".join(lines)
+    except Exception as exc:
+        logger.error("get_leads 失败：%s", exc)
+        return f"查询失败：{exc}"
 
 
 if __name__ == "__main__":

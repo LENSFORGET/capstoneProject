@@ -1,0 +1,9 @@
+{
+  "name": "capstone-xhs",
+  "private": true,
+  "description": "XHS scraper - agent-browser (local install, no global -g needed)",
+  "dependencies": {
+    "agent-browser": "latest",
+    "playwright": "^1.49.0"
+  }
+}

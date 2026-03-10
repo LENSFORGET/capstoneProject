@@ -1,0 +1,2 @@
+[nat.components]
+nat_llama_index = nat.plugins.llama_index.register

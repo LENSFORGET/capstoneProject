@@ -1,0 +1,13 @@
+# -----------------------------------------------------------------------
+# 小红书爬取组件 - 本地运行 Python 依赖
+# 用法：pip install -r requirements-xhs-local.txt
+#
+# NAT 包需单独以 editable 模式安装（需 SETUPTOOLS_SCM 版本变量），
+# 请使用 scripts/setup-xhs-local.ps1 或按 docs/xhs-local-setup.md 操作。
+# -----------------------------------------------------------------------
+
+mcp[cli]>=1.0
+psycopg2-binary>=2.9
+aiorwlock~=1.5
+langchain-core
+requests

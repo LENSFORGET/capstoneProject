@@ -4,6 +4,7 @@ import sys
 import json
 import subprocess
 import threading
+import traceback
 from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
@@ -43,6 +44,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc: Exception):
+    """将未捕获异常转为 500 JSON 响应，便于前端展示 detail。HTTPException 交给 FastAPI 默认处理。"""
+    from fastapi import HTTPException as HTTPEx
+    from fastapi.responses import JSONResponse
+    if isinstance(exc, HTTPEx):
+        raise exc
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+    )
+
 
 # ─── Milvus & Postgres Helpers ────────────────────────────────────────────────
 def _milvus():
@@ -129,6 +145,16 @@ class DeleteDocumentsRequest(BaseModel):
     filenames: List[str]
 
 # ─── Chat Endpoints ───────────────────────────────────────────────────────────
+def _get_hit_field(hit: dict, field: str) -> str:
+    """兼容 hit 顶层与 entity 内两种结构（MilvusClient 不同版本）。"""
+    v = hit.get(field)
+    if v is not None and str(v).strip():
+        return str(v).strip()
+    e = hit.get("entity") or {}
+    v = e.get(field) if isinstance(e, dict) else None
+    return str(v).strip() if v is not None else ""
+
+
 def _search_knowledge_base(query: str, collection: str = DEFAULT_KB, selected_docs: list[str] = None) -> str:
     try:
         from llama_index.embeddings.nvidia import NVIDIAEmbedding
@@ -145,7 +171,7 @@ def _search_knowledge_base(query: str, collection: str = DEFAULT_KB, selected_do
         search_params = {
             "collection_name": collection,
             "data": [vec],
-            "limit": 5,
+            "limit": 25,
             "output_fields": ["text", "title", "source"],
         }
         
@@ -162,88 +188,104 @@ def _search_knowledge_base(query: str, collection: str = DEFAULT_KB, selected_do
             return ""
         parts = []
         for i, hit in enumerate(results[0], 1):
-            e = hit.get("entity", {})
-            parts.append(f"【{i}】{e.get('title', '')}（来源：{e.get('source', '')}）\n{e.get('text', '')}")
+            title = _get_hit_field(hit, "title")
+            source = _get_hit_field(hit, "source")
+            text = _get_hit_field(hit, "text")
+            parts.append(f"【{i}】{title}（来源：{source}）\n{text}")
         return "\n\n".join(parts)
     except Exception as exc:
         return f"[检索异常: {exc}]"
 
 @app.post("/api/chat")
 async def chat_stream_api(req: ChatRequest):
-    if not NVIDIA_API_KEY or NVIDIA_API_KEY.startswith("nvapi-test"):
-        raise HTTPException(status_code=400, detail="No valid NVIDIA_API_KEY configured.")
-    
-    user_msg = req.messages[-1].content
-    history = req.messages[:-1]
-    
-    context = _search_knowledge_base(user_msg, req.kb_name, req.selected_docs)
-    
-    system_prompt = (
-        "你是一位专业的保险顾问 AI，擅长解读保险条款和提供保险建议。\n"
-        "请根据提供的参考资料回答用户的保险问题。\n\n"
-        "要求：\n"
-        "- 结构清晰（适当使用标题和列表）\n"
-        "- 优先基于参考资料回答，并注明出处\n"
-        "- 不要虚构保险条款或数据\n"
-        "- 涉及产品推荐时，说明仅供参考，建议咨询专业顾问"
-    )
-    if req.lang == "EN":
+    try:
+        if not NVIDIA_API_KEY or NVIDIA_API_KEY.startswith("nvapi-test"):
+            raise HTTPException(status_code=400, detail="No valid NVIDIA_API_KEY configured.")
+
+        if not req.messages:
+            raise HTTPException(status_code=400, detail="messages 不能为空")
+
+        user_msg = req.messages[-1].content
+        history = req.messages[:-1]
+
+        context = _search_knowledge_base(user_msg, req.kb_name, req.selected_docs)
+        ctx_len = len(context)
+        ctx_ok = bool(context) and not context.startswith("[检索异常")
+        print(f"[chat] kb={req.kb_name} retrieval_ok={ctx_ok} context_len={ctx_len}")
+
         system_prompt = (
-            "You are a professional insurance advisor AI. Answer insurance questions in English.\n"
-            "Requirements:\n"
-            "- Use English, structured and clear (use headings and bullet points)\n"
-            "- Prioritise answers based on reference materials, cite sources\n"
-            "- Do not fabricate insurance clauses or data\n"
-            "- For product recommendations, note they are for reference only"
-        )
-    elif req.lang == "繁中":
-        system_prompt = (
-            "你是一位專業的保險顧問 AI，擅長解讀保險條款和提供保險建議。\n"
-            "請根據提供的參考資料，以繁體中文回答用戶的保險問題。\n\n"
+            "你是一位专业的保险顾问 AI，擅长解读保险条款和提供保险建议。\n"
+            "请根据提供的参考资料回答用户的保险问题。\n\n"
             "要求：\n"
-            "- 使用繁體中文，結構清晰（適當使用標題和列表）\n"
-            "- 優先基於參考資料回答，並注明出處\n"
-            "- 不要虛構保險條款或數據\n"
-            "- 涉及產品推薦時，說明僅供參考，建議咨詢專業顧問"
+            "- 结构清晰（适当使用标题和列表）\n"
+            "- 优先基于参考资料回答，并注明出处\n"
+            "- 不要虚构保险条款或数据\n"
+            "- 涉及产品推荐时，说明仅供参考，建议咨询专业顾问"
         )
-
-    api_messages = [{"role": "system", "content": system_prompt}]
-    for msg in history[-12:]:
-        api_messages.append({"role": msg.role, "content": msg.content})
-
-    if context and not context.startswith("[检索异常"):
-        pfx = "以下是从保险知识库检索到的相关内容，请参考回答："
         if req.lang == "EN":
-            pfx = "Reference materials from KB:"
-        elif req.lang == "繁中":
-            pfx = "以下是從保險知識庫檢索到的相關內容，請參考回答："
-        user_content = f"{pfx}\n\n{context}\n\n---\n\n{user_msg}"
-    else:
-        user_content = user_msg
-
-    api_messages.append({"role": "user", "content": user_content})
-
-    async def generate():
-        try:
-            stream = llm_client.chat.completions.create(
-                model="minimaxai/minimax-m2.1",
-                messages=api_messages,
-                temperature=0.2,
-                stream=True,
-                max_tokens=2048,
+            system_prompt = (
+                "You are a professional insurance advisor AI. Answer insurance questions in English.\n"
+                "Requirements:\n"
+                "- Use English, structured and clear (use headings and bullet points)\n"
+                "- Prioritise answers based on reference materials, cite sources\n"
+                "- Do not fabricate insurance clauses or data\n"
+                "- For product recommendations, note they are for reference only"
             )
-            for chunk in stream:
-                if not getattr(chunk, "choices", None):
-                    continue
-                delta = chunk.choices[0].delta.content or ""
-                if delta:
-                    yield f"data: {json.dumps({'content': delta})}\n\n"
-            yield "data: [DONE]\n\n"
-        except Exception as exc:
-            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
-            yield "data: [DONE]\n\n"
+        elif req.lang == "繁中":
+            system_prompt = (
+                "你是一位專業的保險顧問 AI，擅長解讀保險條款和提供保險建議。\n"
+                "請根據提供的參考資料，以繁體中文回答用戶的保險問題。\n\n"
+                "要求：\n"
+                "- 使用繁體中文，結構清晰（適當使用標題和列表）\n"
+                "- 優先基於參考資料回答，並注明出處\n"
+                "- 不要虛構保險條款或數據\n"
+                "- 涉及產品推薦時，說明僅供參考，建議咨詢專業顧問"
+            )
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+        api_messages = [{"role": "system", "content": system_prompt}]
+        for msg in history[-12:]:
+            api_messages.append({"role": msg.role, "content": msg.content})
+
+        if context and not context.startswith("[检索异常"):
+            pfx = "以下是从保险知识库检索到的相关内容，请参考回答："
+            if req.lang == "EN":
+                pfx = "Reference materials from KB:"
+            elif req.lang == "繁中":
+                pfx = "以下是從保險知識庫檢索到的相關內容，請參考回答："
+            user_content = f"{pfx}\n\n{context}\n\n---\n\n{user_msg}"
+        else:
+            user_content = user_msg
+
+        api_messages.append({"role": "user", "content": user_content})
+
+        async def generate():
+            try:
+                stream = llm_client.chat.completions.create(
+                    model="minimaxai/minimax-m2.1",
+                    messages=api_messages,
+                    temperature=0.2,
+                    stream=True,
+                    max_tokens=2048,
+                )
+                for chunk in stream:
+                    if not getattr(chunk, "choices", None):
+                        continue
+                    d = chunk.choices[0].delta
+                    delta = (d.content or getattr(d, "reasoning", None) or "").__str__()
+                    if delta:
+                        yield f"data: {json.dumps({'content': delta})}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as exc:
+                print(f"[chat] llm_error: {exc}")
+                yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(generate(), media_type="text/event-stream")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(exc))
 
 # ─── Knowledge Base Endpoints ─────────────────────────────────────────────────
 @app.get("/api/kb/collections")

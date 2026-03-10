@@ -22,7 +22,7 @@ The system uses Docker Compose with the following services:
 | postgres | Xiaohongshu scraped data storage | 5432 |
 | app | NAT application (workflows, MCP tools) | - |
 | api | FastAPI backend for chat & KB management | 8000 |
-| frontend | Next.js UI | 3000 |
+| frontend | Next.js UI | 4000（Windows 上 3000 可能被保留） |
 | test | Test container (on-demand) | - |
 
 ### Two Data Pipelines
@@ -37,10 +37,10 @@ python rag_ingest.py
 
 **Pipeline 2: Xiaohongshu User Insights (independent, NOT for RAG)**
 ```
-nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
-  → GLM 5 analyzes posts (not just extraction)
-  → PostgreSQL via xhs_db_mcp
-  → /app/data/xhs_user_insights.md
+run_zeroclaw_scraper.ps1
+ → ZeroClaw Agent uses playwright-npx (headful mode)
+ → xhs-db-tool writes to PostgreSQL
+ → /app/data/xhs_user_insights.md
 ```
 
 **Pipeline 3: RAG Insurance Q&A**
@@ -101,7 +101,7 @@ python rag_ingest.py --include-xhs
 nat run --config_file workflow_rag.yaml
 
 # Run Xiaohongshu scraper workflow
-nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
+run_zeroclaw_scraper.ps1
 
 # Run generic browser workflow
 nat run --config_file workflow_browser.yaml
@@ -124,7 +124,7 @@ docker-compose run --rm test pytest test_e2e.py -v
 
 ```bash
 # Frontend dev server runs automatically in container
-# Access at http://localhost:3000
+# Access at http://localhost:4000（若 3000 被 Windows 保留则使用 4000）
 
 # For local dev (without Docker):
 cd frontend
@@ -162,10 +162,10 @@ The project contains local NAT packages installed in editable mode:
 |------|---------|
 | `rag_ingest.py` | PDF parsing (MinerU/pypdf) and vectorization into Milvus |
 | `rag_mcp.py` | FastMCP server exposing MilvusRetriever tools for RAG |
-| `agent_browser_mcp.py` | FastMCP wrapper around agent-browser CLI for web automation |
+| `run_zeroclaw_scraper.ps1` | Batch script to run the ZeroClaw XHS scraper |
 | `xhs_db_mcp.py` | FastMCP server for PostgreSQL storage of scraped data |
 | `workflow_rag.yaml` | NAT react_agent workflow for insurance Q&A |
-| `workflow_scraper.yaml` | NAT react_agent workflow for Xiaohongshu scraping |
+| `zeroclaw_scraper_agent.toml` | ZeroClaw Agent configuration and system prompt for XHS scraper |
 | `workflow_browser.yaml` | Generic browser workflow |
 | `api.py` | FastAPI backend for chat, KB management, XHS data |
 | `xhs_db_init.sql` | PostgreSQL schema initialization |

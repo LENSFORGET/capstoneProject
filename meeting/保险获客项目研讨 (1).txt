@@ -1,0 +1,341 @@
+说话人A  04:28
+哈哈哈。
+
+说话人A  04:32
+can i can you s can you speak English or Mandarin or what？
+
+说话人A  04:40
+oh English is fine OK？
+
+说话人A  04:41
+English is fine no problem go ahead sure no problem go ahead。
+
+说话人B  06:17
+嗯
+
+说话人B  06:53
+i i'm sorry you you you have you haven't share your screen？OK。
+
+说话人B  08:12
+yeah one more sorry one more add on points i think you also need to go through some tnc as well since for this bonus you usually just show what is the product inside and then how we calculate your benefit etc but actually especially for the insurance some tnc maybe has some restriction and then so that it will be also very crucial for the customer so that i think not only the product bonus。
+
+说话人B  08:39
+but also with the tncs。
+
+说话人B  08:44
+there should be another document which is maybe have some appendices you can find especially for some terms that maybe a small numbers and then which is usually refer to some tnc。
+
+说话人B  08:58
+是的，just add on for this part yeah。
+
+说话人B  09:02
+yeah，OK。
+
+说话人B  09:19
+yep。
+
+说话人B  15:54
+啊
+
+说话人B  16:06
+yes，i can hear OK i think you can continue yeah。
+
+说话人B  18:21
+yeah，so sorry i have one question so for the order data from the xiaohongshu i think that this is not a real time data right you just pull it once and then put it into retail database am i correct。
+
+说话人B  18:51
+OK，OK，it's OK actually i have no concern about the real time but i'm not sure how you get the data for of first of all，so，but for my knowledge as we s no matter is xiaohongshu or the data from the social media actually it it's actually，it's quite hard to get real time since it usually will block the any agent or any anonymous account that try to get the data。
+
+说话人B  19:22
+they will usually do some protection of like this yes，so that i'm not sure whether have you encounter this kind of issue when you trying to grab the data from real time so i just wanna mention if you find this is a bottleneck that you find in this project so that i think that oh w we no need to do in real time OK it is not the main concern that oh it's also not the focus that in this project OK。
+
+说话人B  19:54
+so once afterwards you find that real time is a bottleneck and then actually it's i understand it's quite hard。
+
+说话人B  20:02
+and to get the real time data and also you try since you try to cross their checking cross their protection from this kind of so i think it is i and also i think it is some risk actually if you were try yeah so i think it's a risk so that maybe you can just get some data that's once and then so that's just put it into database or yes。
+
+说话人B  20:33
+whatever kind of database that you trying to work so that i think is good enough for this project no need to do in real time。
+
+说话人B  20:43
+this is just my add on or for this part。
+
+说话人B  21:03
+嗯
+
+说话人B  22:00
+OK，no problem。
+
+说话人B  22:13
+嗯嗯
+
+说话人B  22:56
+嗯
+
+说话人B  23:05
+嗯嗯
+
+说话人B  23:24
+嗯
+
+说话人B  26:16
+sorry，sorry whi- which l l m you are using whi- whi- whi- which model you are using。
+
+说话人B  26:56
+so you are using the cloud service。
+
+说话人B  27:01
+yeah，you are using the cloud service。
+
+说话人B  27:13
+OK。
+
+说话人B  27:20
+OK，so you are using the api from our side。OK。
+
+说话人B  27:31
+yeah。
+
+说话人B  27:38
+and then order and also order embedding models and also the reranking model in the rht is also using the api through our web am i correct。
+
+说话人B  28:08
+it's OK，no problem。
+
+说话人B  28:17
+嗯
+
+说话人B  29:08
+yes，here you have showed the insurance rag Q&A system，but i also remember that for last time i also asked you to show what is true a customer acquisition procedure especially for the insurance company so do you have any things wanna to share about this topic about the s- customer acquisition procedure。
+
+说话人B  29:38
+since i remember that your project is mainly work on this topic yeah since currently you're showing it's more like Q&A system for insurance agent about the insurance top product OK，yeah i think it is a big difference from the objective of this project since the project is trying to work customer acquisition system of course for the product side，it also need the product information。
+
+说话人B  30:19
+but another way in another part，we also need to know first of all what is the customer acquisition procedure usually appro- usually working on in the insurance company，and also how the or how it's can be mapping through the social media post or social media information，and also map with their product for example i find that in your xiaohongshu example you're trying the post you're trying to do some keywords like insurance。
+
+说话人B  30:55
+and also some maybe，some very serious sick something like that，but actually for the customer acquisition is not only the customer talking about the insurance post for example it just a very brief example for example the there is a post is asking about that they want our parents wanna to write to ask that or want to pass their children to a foreign country for studying OK。
+
+说话人B  31:27
+it's just a very common post right they're asking more details so OK how they're live in us or how they're live in uk and then stand a comparison between these two country etc。
+
+说话人B  31:38
+actually，this is also opportunity，it's also a very potential customer for the insurance company to sell some insurance which is related to the case that can protect or some provide some protection when they are studying in a foreign country OK this is just like a mapping and then OK this will become that potential customer OK right with this post actually is not related to insurance and is not related to any wording related to insurance actually OK。
+
+说话人B  32:11
+so it just example for another example is for example of that。
+
+说话人B  32:15
+is an other user，they're asking about OK，i have i've just do some body check and find something blah and then is there any things for them or is suppose is asking about there maybe lady that he she's pregnant and then it's just him asking about the other user oh what i sh- i need to prepare for the newborn baby something like that actually it for this pro actually you will also match some product for the insurance OK。
+
+说话人B  32:44
+so that this is what i think that this is the more focus the more for focus form for this project。
+
+说话人B  32:51
+how you use dispose or how you use the product？
+
+说话人B  32:55
+you know and then how to do discount mapping OK this is the first thing with the user or potential customer and then map with the product another way is Wu is that another i this is the first phase where i would say and then for the second phase is what how to map the customer with the agent yes，this is usually for the insur maybe you can all this is usually for the insurance company will work。
+
+说话人B  33:25
+OK，this is not the i would say that are different level for the agent level will be here，but for the company level will be upper and then it will look all the agent will be a pool and then they wanna to more customer to join their company and then not only with the product mapping with the customer for the position customer they will also do the agent mapping what is the meaning for the agent mapping it just like they have ten maybe hundreds of agent and then they know what is the specialist of the。
+
+说话人B  33:54
+agent for example some agent that special。
+
+说话人B  33:58
+i'm very familiar and also they have a very advantage to sell some product which is related to family some will be have a very advantage to sell the product which is related to the some very serious disease discount product some will be have general product so every age and also it's every rate agent will be have their specialist and even for the insurance company they even wanna to map the personality as well they have some pool and then they have some remarks for this agent have what kind of personality。
+
+说话人B  34:35
+and then from the social media post，they also can guess or some predict some personality of the potential customer so this is what they wanna to match the customer to the agent as well so that this is wanna why they wanna to do this they just wanna to boost the batch score and then boost the successful rate afterwards this is what this is actually i would say i'm also not very familiar with the whole procedure since i'm not in the insurance company。
+
+说话人B  35:08
+but for my understanding it is just i just know some very i would say just very top information like this one but of course for the whole customer acquisition procedure they'll also know after you do this mapping and how to you process to become a real case or to a real business that's this is they want to know since i know that for the for currently for the insurance company they are they usually do is very manually you can imagine。
+
+说话人B  35:41
+to do all this mapping and then they want to seek the new customer actually all the things is very manually to do this kind of things for the marketing and then so that's i think that this is what everyone wants explore in this project to see how to maybe the phase one will be to do the customer map to the product the phase one and then phase two of course depends on time if after the phase one and then maybe for the the next student。
+
+说话人B  36:11
+i'm not sure will be extend this project to the phase two。
+
+说话人B  36:14
+will be the customer match to the agent yeah so that i think this is true all main yes the main parts that all all all i wanna to know more about this project。
+
+说话人B  36:38
+yeah understand。
+
+说话人B  36:39
+哈哈哈。
+
+说话人B  36:50
+yeah。
+
+说话人B  37:06
+yeah maybe i think that for the product map to the customer will be easier。
+
+说话人B  37:34
+for the phase one this like this will be mu- much more easier since you just what yeah i can give you some of some comment or some suggestion you can for us to see how to simplify the whole problem first of all maybe you can just narrow down the whole scope OK，like this i have mention of course this is the ideal case will be go through all the product of the insurance。
+
+说话人B  37:36
+but actually you can narrow down。
+
+说话人B  38:07
+maybe you just pick three to five product OK maybe in different categories for example some is related to the general insurance some related to serious sick something like that serious disease some will be related to the live i'm not sure just you pick yourself just pick since that actually is many products in the insurance company so you just narrow down the scope and then base on this scope。
+
+说话人B  38:39
+you try to make use of some lm to generate some question and then use this kind of question and then try to put it in your searching for xiaohongshu and then you can you i think that in this way and then you can find some very valuable host in xiaohongshu like this one since i know that if you try to search from a scratch in the xiaohongshu，actually is quite hard OK but if you make use of the product。
+
+说话人B  39:04
+and then p- just sum it to the lm and then ask the lm to do the rest to OK what's kind of question i should put the xiaohongshu to get some data and then i believe your lm can do a very good job like this OK，yes，so that afterwards and then you can get all the data from xiaohongshu and then you can do all the things sets in the afterwards yeah。
+
+说话人B  39:12
+so that you since you can the first of all you need to think how you prepare all the data that's why pqc i'm asking。
+
+说话人B  39:44
+do you really need real time data for xiaohongshu that's why i for my suggestion i think that this is not necessary for this case since yeah that's why yeah so that that's so that i think that for the next two weeks all i think that you need to prepare all the data first you try to think about how you prepare all the data and that all the things you can do it since you have the knowledge of rag you have all the knowledge on how to make sure of the better database to order searching actually。
+
+说话人B  39:53
+i think this part is the easiest part for you，but how you prepare the data i think i you need to need some time to think about it。
+
+说话人B  39:54
+miss。
+
+说话人B  39:57
+yeah。
+
+说话人B  40:18
+yeah，just think about you all you need to think of course otherwise you don't need to join this project。
+
+说话人B  40:19
+yeah。
+
+说话人B  40:25
+all the knowledge you already know do you have last time remember that you mention to me you have experience on里奇 you have experience on building an agent with mcn right so actually what you have done in these two ways actually you just use your previous knowledge to work on it and then you can do all the job very great okay but if you wanna to join a new project and then you have you need to think about it you how to process the whole project how to decide the project and then you how to get。
+
+说话人B  40:47
+the data。
+
+说话人B  40:48
+for any project one of the crucial point is how to get the data and how to prepare the data。
+
+说话人A  41:02
+yeah。
+
+说话人A  41:02
+ha ha ha。
+
+说话人B  41:05
+yeah，i just give you a difficult question and then you try i think that it's OK that you don't have any sh you can search it and then you just let me know the updates even for the next time you don't have the whole total solution i think it's also no problem，but you just try to work on it and then to see yeah try to work on it and then we can discuss more next time。
+
+说话人B  41:30
+yes。
+
+说话人B  41:44
+yeah。
+
+说话人B  42:01
+let me check give me a second i need to check my stage。
+
+说话人B  42:19
+March ten is OK oh，but it will be go back to three p m for March ten is it OK。
+
+说话人A  42:30
+对，yeah，but OK anyway have a minute i've i'll be i have a class at three thirty so i may only join for half an hour if March ten OK i just want to say it i think it's more important between you and doctor Wang due to discuss，but i'll meet you i'll see you next week what's your name i forgot the students。
+
+说话人A  42:53
+I will see you next week i will discuss with you i think doctor Wang gave you some good comments so try to narrow down your data set don't need to be do too many i think do a few five or six at most i think that's good enough so i think let's discuss it next Monday on a class next Monday  OK thank you doctor.
+
+说话人B  43:11
+Wang。.
+
+说话人B  43:12
+so yeah，sorry professor fan i have some questions。
+
+说话人B  43:14
+yeah。
+
+说话人B  43:16
+yeah a actually of si Tao ma。
+
+说话人B  43:21
+si Tao so it is his project in a class or。
+
+说话人A  43:27
+no，no，no，no，no because we also have a usual meeting time in case they the student all student was would come to on every Monday。
+
+说话人A  43:36
+between one o'clock to three o'clock four o'clock they have a we have a class to all student were there so if they have any question about the any question relate to their project so we can discuss face to face there's a just a session time so of course each student will pick up their own project differently。
+
+说话人A  43:54
+okay。
+
+说话人A  43:54
+differently different not the same。
+
+说话人A  43:57
+Okay，so.
+
+说话人B  43:58
+This is a just some similar to the fyp。.
+
+说话人A  44:01
+yeah，yeah，yeah。basically it basically fyp basically is fyp。
+
+说话人A  44:04
+OK。
+
+说话人A  44:05
+basically fyp。
+
+说话人A  44:06
+So.
+
+说话人B  44:06
+They have three months。.
+
+说话人A  44:08
+yeah。
+
+说话人A  44:09
+yeah。
+
+说话人A  44:09
+that's right，so they're i think they have to submit theses by end April。
+
+说话人A  44:14
+and April。
+
+说话人A  44:14
+OK。
+
+说话人A  44:15
+yeah so i am i right please correct me if i'm wrong i think i if i remember correctly it should be end of April，so，and then they and because they have final year already，so after that they will find they will look for jobs。
+
+说话人A  44:27
+ha ha ha。
+
+说话人A  44:30
+yeah their final year this is the fyp yeah，absolutely this is their fyp project that's right yes。
+
+说话人B  44:35
+oh OK got it understand。
+
+说话人B  44:39
+OK。
+
+说话人B  44:39
+thank you thank you professor fan。
+
+说话人A  44:40
+OK，thank you so i think next week i'll like by on ten March tenth i will join the beginning but then after that you i think you two can continue the discussion OK。
+
+说话人B  44:50
+OK，thank you。
+
+说话人A  44:51
+OK，thank you so much thank you so i see you next week for the student OK see you bye bye。
+
+说话人B  44:58
+拜拜 bye bye for rest time bye bye zi Tao。
