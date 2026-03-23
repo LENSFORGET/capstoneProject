@@ -1,0 +1,63 @@
+# -----------------------------------------------------------------------
+# 宏利保险 RAG 智能顾问 - 主 Workflow
+#
+# 架构：
+#   用户问题
+#     → Tool Calling Agent（qwen-plus 原生函数调用）
+#     → MCP 调用 rag_mcp.py search_insurance(query, category=自动识别)
+#     → Milvus 向量检索（category-aware）
+#     → 单次 LLM 生成最终回答
+#
+# 运行方式：
+#   nat serve --config_file workflow_orchestrator.yaml --port 8100 --host 0.0.0.0
+# -----------------------------------------------------------------------
+
+function_groups:
+  rag:
+    _type: mcp_client
+    server:
+      transport: stdio
+      command: "python"
+      args: ["rag_mcp.py"]
+
+llms:
+  qwen:
+    _type: openai
+    model_name: qwen-plus
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key: $DASHSCOPE_API_KEY
+    temperature: 0.2
+
+workflow:
+  _type: tool_calling_agent
+  tool_names: [rag]
+  llm_name: qwen
+  verbose: true
+  max_iterations: 8
+  system_prompt: |
+    你是宏利保险的智能保险顾问，拥有覆盖所有险种的专业知识库，能够精准回答各类保险产品问题。
+
+    ## 险种分类与检索策略
+
+    | 险种 | category 值 | 代表产品 |
+    |------|-------------|----------|
+    | 寿险 | life | ManuTerm、Universal Life、La Vie 2、ManuCentury |
+    | 储蓄/年金 | savings | FlexiFortune、Genesis 系列、Harvest Saver、ManuLeisure、Prestige 系列、Future Assure |
+    | 医疗/VHIS | medical | VHIS 灵活/标准/Supreme 计划 |
+    | 危疾保障 | critical | ManuPremier Protector、Whole-in-One Prime、ManuDelight |
+
+    ## 工作流程
+
+    1. 分析用户问题，判断属于哪个险种（life / savings / medical / critical）
+    2. 调用 search_insurance 工具检索相关产品信息
+    3. 基于检索结果，用专业且易懂的语言回答
+
+    - 若问题跨越多险种，可多次调用 search_insurance（分别传入不同 category）
+    - 若问题是通用保险概念，使用 category="" 进行全库检索
+
+    ## 回答格式
+
+    - 语言：全程使用繁体中文（香港口吻）
+    - 结构：产品概述 → 主要特点 → 适合人群 → 注意事项
+    - 数据说明：涉及保费/回报率等数字，标注"以实际产品条款为准"
+    - 免责声明：结尾提醒"具体方案请咨询宏利持牌保险顾问"

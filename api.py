@@ -208,7 +208,11 @@ async def chat_stream_api(req: ChatRequest):
         user_msg = req.messages[-1].content
         history = req.messages[:-1]
 
-        context = _search_knowledge_base(user_msg, req.kb_name, req.selected_docs)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        context = await loop.run_in_executor(
+            None, _search_knowledge_base, user_msg, req.kb_name, req.selected_docs
+        )
         ctx_len = len(context)
         ctx_ok = bool(context) and not context.startswith("[检索异常")
         print(f"[chat] kb={req.kb_name} retrieval_ok={ctx_ok} context_len={ctx_len}")
@@ -260,20 +264,44 @@ async def chat_stream_api(req: ChatRequest):
 
         async def generate():
             try:
-                stream = llm_client.chat.completions.create(
-                    model="minimaxai/minimax-m2.1",
-                    messages=api_messages,
-                    temperature=0.2,
-                    stream=True,
-                    max_tokens=2048,
-                )
-                for chunk in stream:
-                    if not getattr(chunk, "choices", None):
-                        continue
-                    d = chunk.choices[0].delta
-                    delta = (d.content or getattr(d, "reasoning", None) or "").__str__()
-                    if delta:
-                        yield f"data: {json.dumps({'content': delta})}\n\n"
+                import asyncio
+                import threading
+                loop = asyncio.get_event_loop()
+                queue: asyncio.Queue = asyncio.Queue()
+
+                def _stream_to_queue():
+                    try:
+                        stream = llm_client.chat.completions.create(
+                            model="minimaxai/minimax-m2.1",
+                            messages=api_messages,
+                            temperature=0.2,
+                            stream=True,
+                            max_tokens=2048,
+                        )
+                        for chunk in stream:
+                            if not getattr(chunk, "choices", None):
+                                continue
+                            d = chunk.choices[0].delta
+                            delta = (d.content or getattr(d, "reasoning", None) or "").__str__()
+                            if delta:
+                                asyncio.run_coroutine_threadsafe(queue.put(("content", delta)), loop)
+                    except Exception as exc:
+                        asyncio.run_coroutine_threadsafe(queue.put(("error", str(exc))), loop)
+                    finally:
+                        asyncio.run_coroutine_threadsafe(queue.put(("done", None)), loop)
+
+                thread = threading.Thread(target=_stream_to_queue, daemon=True)
+                thread.start()
+
+                while True:
+                    kind, value = await queue.get()
+                    if kind == "done":
+                        break
+                    elif kind == "error":
+                        print(f"[chat] llm_error: {value}")
+                        yield f"data: {json.dumps({'error': value})}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'content': value})}\n\n"
                 yield "data: [DONE]\n\n"
             except Exception as exc:
                 print(f"[chat] llm_error: {exc}")
@@ -479,6 +507,8 @@ async def generate_summaries(collection: str):
 
 @app.post("/api/kb/collections/{collection}/documents/upload")
 async def upload_documents(collection: str, files: List[UploadFile] = File(...), use_mineru: bool = Form(False), clear_first: bool = Form(False)):
+    import asyncio
+
     async def generate():
         if not files:
             yield f"data: {json.dumps({'error': 'No files selected'})}\n\n"
@@ -501,58 +531,80 @@ async def upload_documents(collection: str, files: List[UploadFile] = File(...),
             sys.path.insert(0, "/app")
             import rag_ingest as ri
 
-            client = ri.get_milvus_client()
-            embedder = ri.get_embedder()
+            loop = asyncio.get_event_loop()
+
+            def _init_clients():
+                c = ri.get_milvus_client()
+                e = ri.get_embedder()
+                return c, e
+
+            client, embedder = await loop.run_in_executor(None, _init_clients)
 
             if clear_first and collection in client.list_collections():
-                client.drop_collection(collection)
+                await loop.run_in_executor(None, client.drop_collection, collection)
                 yield f"data: {json.dumps({'message': f'Cleared knowledge base {collection}'})}\n\n"
 
-            ri.ensure_collection(client, collection_name=collection)
+            await loop.run_in_executor(None, lambda: ri.ensure_collection(client, collection_name=collection))
 
             total_inserted = 0
             for pdf_path in saved_paths:
                 fname = Path(pdf_path).name
                 yield f"data: {json.dumps({'message': f'Parsing {fname}...'})}\n\n"
-                gen = ri.load_pdf_documents(
-                    pdf_path=pdf_path,
-                    use_mineru=use_mineru,
-                    mineru_output_dir="/app/data/mineru_output",
-                )
-                docs = []
-                if type(gen).__name__ == "generator":
-                    try:
-                        while True:
-                            item = next(gen)
-                            if isinstance(item, str):
-                                yield f"data: {json.dumps({'message': item})}\n\n"
-                    except StopIteration as e:
-                        docs = e.value
-                else:
-                    docs = gen
+
+                def _load_docs():
+                    gen = ri.load_pdf_documents(
+                        pdf_path=pdf_path,
+                        use_mineru=use_mineru,
+                        mineru_output_dir="/app/data/mineru_output",
+                    )
+                    d = []
+                    msgs = []
+                    if type(gen).__name__ == "generator":
+                        try:
+                            while True:
+                                item = next(gen)
+                                if isinstance(item, str):
+                                    msgs.append(item)
+                        except StopIteration as e:
+                            d = e.value
+                    else:
+                        d = gen
+                    return d, msgs
+
+                docs, parse_msgs = await loop.run_in_executor(None, _load_docs)
+                for m in parse_msgs:
+                    yield f"data: {json.dumps({'message': m})}\n\n"
+
                 if not docs:
                     yield f"data: {json.dumps({'message': f'Warning: No content extracted from {fname}, skipping'})}\n\n"
                     continue
 
                 yield f"data: {json.dumps({'message': f'Extracted {len(docs)} text chunks, starting vectorization...'})}\n\n"
 
-                n = ri.embed_and_insert(client, embedder, docs, source_label=fname, collection_name=collection)
+                n = await loop.run_in_executor(
+                    None,
+                    lambda: ri.embed_and_insert(client, embedder, docs, source_label=fname, collection_name=collection),
+                )
 
                 total_inserted += n
                 yield f"data: {json.dumps({'message': f'Inserted {n} vectors for {fname}'})}\n\n"
-                
+
                 yield f"data: {json.dumps({'message': f'Generating AI summary for {fname}...'})}\n\n"
                 if docs:
                     combined_text = "\n".join([d.get("text", "") for d in docs[:10]])
-                    summary_text = generate_summary_with_glm(combined_text)
-                    update_file_metadata(collection, fname, fname, summary_text)
+                    summary_text = await loop.run_in_executor(
+                        None, generate_summary_with_glm, combined_text
+                    )
+                    await loop.run_in_executor(
+                        None, update_file_metadata, collection, fname, fname, summary_text
+                    )
                     yield f"data: {json.dumps({'message': f'Summary generated for {fname}'})}\n\n"
 
             yield f"data: {json.dumps({'message': f'All done! Total {total_inserted} vectors inserted.', 'status': 'done'})}\n\n"
 
         except Exception as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
-            
+
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 # ─── Xiaohongshu Endpoints ────────────────────────────────────────────────────

@@ -1,0 +1,80 @@
+# -----------------------------------------------------------------------
+# 危疾与综合保障专业 Agent Workflow
+# 负责：危疾险、综合保障计划咨询
+# 涵盖产品：ManuPremier Protector、Whole-in-One Prime 3、
+#           ManuDelight HK、失能护理服务
+#
+# 运行方式（由 docker-compose 的 nat-agent-critical 服务管理）：
+#   nat serve --config_file workflow_agent_critical.yaml --port 8104
+#
+# 环境变量：
+#   NVIDIA_API_KEY  - NVIDIA API 密钥
+#   MILVUS_HOST     - Milvus 主机
+#   RAG_CATEGORY    - 预设险种（自动注入 critical）
+# -----------------------------------------------------------------------
+
+function_groups:
+  rag:
+    _type: mcp_client
+    server:
+      transport: stdio
+      command: "python"
+      args: ["rag_mcp.py"]
+      env:
+        RAG_CATEGORY: "critical"
+
+llms:
+  glm:
+    _type: openai
+    model_name: minimaxai/minimax-m2.1
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key: $NVIDIA_API_KEY
+    temperature: 0.2
+    model_kwargs:
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: true
+
+workflow:
+  _type: react_agent
+  tool_names: [rag]
+  llm_name: glm
+  verbose: true
+  max_retries: 5
+  system_prompt: |
+    你是宏利保险的**危疾与综合保障专业顾问**，专注于以下产品线：
+
+    ## 专业范围
+    - **ManuPremier Protector（宏卓保障计划）**：多阶段危疾保障，涵盖早期、中期、严重阶段
+    - **Whole-in-One Prime 3（全心保 Prime 3）**：综合保障计划，集寿险保障与危疾于一体
+    - **ManuDelight HK**：全面健康保障计划，含多种危疾和意外保障
+    - **失能护理服务（Incapacity Care Service）**：提供失能状态下的生活护理支持
+
+    ## 危疾险核心概念
+    - **三阶段保障**：早期危疾（如早期癌症）、中期危疾、严重危疾均可理赔
+    - **常见涵盖危疾**：癌症、心脏病发作、脑中风、器官衰竭等（以保单条款为准）
+    - **保费豁免**：确诊严重危疾后通常豁免后续保费
+    - **多次赔偿**：部分产品支持同一疾病不同阶段多次赔偿
+
+    ## 可用工具
+    {tools}
+
+    可用工具名称：{tool_names}
+
+    ## 工具使用
+    使用 `search_insurance` 工具（category="critical"）检索危疾险相关产品信息。
+
+    ## 回答原则
+    1. **疾病覆盖范围**：详细说明涵盖的危疾清单和排除条款
+    2. **理赔条件**：清晰解释各阶段的理赔触发条件
+    3. **保障金额设计**：说明如何根据收入、负债和家庭责任设定保额
+    4. **与医疗险的协同**：解释危疾险与医疗险互补关系
+
+    ## 回答格式
+    - 使用中文回答
+    - 对具体疾病保障，注明需以实际保单条款为准
+    - 对理赔金额问题，提示需联系宏利客服确认
+
+    如果问题涉及纯寿险、储蓄险或 VHIS，请告知超出专业范围。
+
+    请等待用户的问题，然后开始工作。

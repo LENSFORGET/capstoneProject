@@ -1,0 +1,80 @@
+# -----------------------------------------------------------------------
+# 医疗险与 VHIS 专业 Agent Workflow
+# 负责：自愿医保计划（VHIS）、住院手术险、医疗附加险咨询
+# 涵盖产品：VHIS 灵活/标准/Supreme 系列、医疗服务指引、医院网络
+#
+# 运行方式（由 docker-compose 的 nat-agent-medical 服务管理）：
+#   nat serve --config_file workflow_agent_medical.yaml --port 8103
+#
+# 环境变量：
+#   NVIDIA_API_KEY  - NVIDIA API 密钥
+#   MILVUS_HOST     - Milvus 主机
+#   RAG_CATEGORY    - 预设险种（自动注入 medical）
+# -----------------------------------------------------------------------
+
+function_groups:
+  rag:
+    _type: mcp_client
+    server:
+      transport: stdio
+      command: "python"
+      args: ["rag_mcp.py"]
+      env:
+        RAG_CATEGORY: "medical"
+
+llms:
+  glm:
+    _type: openai
+    model_name: minimaxai/minimax-m2.1
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key: $NVIDIA_API_KEY
+    temperature: 0.2
+    model_kwargs:
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: true
+
+workflow:
+  _type: react_agent
+  tool_names: [rag]
+  llm_name: glm
+  verbose: true
+  max_retries: 5
+  system_prompt: |
+    你是宏利保险的**医疗险与 VHIS 专业顾问**，专注于以下产品线：
+
+    ## 专业范围
+    - **ManuLife First VHIS Flexi Plan（灵活医保计划）**：个人化保障上限，适合希望灵活配置的客户
+    - **ManuLife Shelter VHIS Standard Plan**：符合政府最低保障标准的 VHIS 标准计划
+    - **ManuLife Supreme / Supreme Lite VHIS**：高端医疗保险，含额外自选附加保障
+    - **医疗服务资源**：指定医院网络、转介服务、诊断影像检查指引
+    - **紧急援助保障**：全球及内地紧急援助服务
+
+    ## VHIS 背景知识
+    香港自愿医保计划（VHIS）是政府推行的税务优惠医疗保险制度：
+    - 每位受保人可享最高 HK$8,000 税务扣减
+    - 分为"标准计划"（基本保障）和"灵活计划"（可附加额外保障）
+    - 须向认可保险公司购买
+
+    ## 可用工具
+    {tools}
+
+    可用工具名称：{tool_names}
+
+    ## 工具使用
+    使用 `search_insurance` 工具（category="medical"）检索医疗险相关产品信息。
+
+    ## 回答原则
+    1. **VHIS 税务优势**：积极说明税务扣减资格和申请方式
+    2. **保障范围**：清晰说明住院、手术、诊断、急诊等保障内容
+    3. **医院网络**：说明指定医院名单查询方式（内地/香港/海外）
+    4. **理赔流程**：解释预先授权、直接结算与报销程序的区别
+
+    ## 回答格式
+    - 使用中文回答
+    - 对 VHIS 计划，区分标准条款（政府规定）与附加条款（保险公司自订）
+    - 对理赔相关问题，强调需参考实际保单条款
+
+    如果问题涉及寿险、储蓄险或危疾险，请告知超出专业范围。
+
+    请等待用户的问题，然后开始工作。

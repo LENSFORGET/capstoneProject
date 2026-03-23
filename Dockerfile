@@ -122,11 +122,19 @@ COPY xhs_db_mcp.py /app/
 COPY xhs_db_init.sql /app/
 COPY ui.py /app/
 
+# 多 Agent 系统 Workflow 文件
+COPY workflow_orchestrator.yaml /app/
+COPY workflow_agent_life.yaml /app/
+COPY workflow_agent_savings.yaml /app/
+COPY workflow_agent_medical.yaml /app/
+COPY workflow_agent_critical.yaml /app/
+
 # UI 依赖（Gradio + OpenAI 兼容接口）
 RUN pip install --no-cache-dir "gradio>=4.0" "openai>=1.0"
 
-# 复制保险产品手册 PDF（RAG 主要知识源）
-COPY manupremier-protector.pdf /app/
+# 复制保险产品手册 PDF 目录（多产品 RAG 知识源）
+# 注意：docker-compose 中通过 volume mount ./PDF:/app/PDF:ro 使用
+RUN mkdir -p /app/PDF
 
 # 确保数据目录存在（mineru 输出、向量数据、洞察报告）
 RUN mkdir -p /app/data/mineru_output /app/data/mineru_models
