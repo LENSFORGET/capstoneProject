@@ -1,63 +1,60 @@
-# NAT 小红书保险 RAG 系统
+# 宏利保险 AI 智能顾问系统
 
-基于 **NVIDIA NeMo Agent Toolkit (NAT)** 构建的保险知识 RAG 问答系统。
-通过 LLM 驱动 agent-browser 自动采集小红书保险内容，利用 NVIDIA NIM 向量化后存入 Milvus，支持 RAG 增强的智能保险问答。
+基于 **NVIDIA NeMo Agent Toolkit (NAT)** 构建的宏利香港保险 RAG 问答系统。
+系统以 33 份官方产品手册 PDF 为知识库，通过阿里云百炼 `qwen-plus` 大模型 + NVIDIA NIM 向量检索，
+提供覆盖寿险、储蓄险、医疗险、危疾险全险种的专业中文保险咨询服务。
+
+**访问地址：http://localhost:4000**
 
 ---
 
 ## 系统架构
 
 ```
-Docker Compose
-├── etcd           - Milvus 元数据存储
-├── minio          - Milvus 对象存储
-├── milvus         - 向量数据库（Standalone 模式，端口 19530）
-└── app            - NAT 应用容器
-    ├── agent_browser_mcp.py   (FastMCP) 浏览器自动化工具
-    ├── rag_mcp.py             (FastMCP) RAG 检索工具
-    ├── workflow_scraper.yaml  (NAT)     小红书爬虫 Workflow
-    ├── rag_ingest.py          (Python)  向量入库脚本
-    └── workflow_rag.yaml      (NAT)     RAG 问答 Workflow
-```
-
-### 两条独立管道
-
-**管道一：PDF 知识库构建（主 RAG 数据源）**
-```
-python rag_ingest.py
-  └─ pypdf 解析 manupremier-protector.pdf
+用户问题
+  │
+  ▼
+nat-ui（NeMo Agent Toolkit UI，端口 4000）
+  │  HTTP
+  ▼
+nat-orchestrator（tool_calling_agent，端口 8100）
+  │  ← qwen-plus（阿里云百炼 DashScope）
+  │  MCP stdio
+  ▼
+rag_mcp.py（FastMCP）
+  │  category-aware 向量检索
+  ▼
+Milvus（向量数据库，端口 19530）
+  └─ insurance_docs 集合
+       ├─ 33 份宏利香港 PDF 手册
+       ├─ 2,438 个语义分块
        └─ NVIDIA NIM nv-embedqa-e5-v5 向量化
-            └─ pymilvus → Milvus insurance_docs collection
-
-# 可选：同时入库小红书数据作为补充
-python rag_ingest.py --include-xhs
 ```
 
-**管道二：小红书用户洞察（完全独立，不向 RAG 入库）**
-```
-nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
-  └─ GLM 5 理解用户发帖（不是简单提取）
-       ├─ 分析用户需求、痛点、情感倾向
-       ├─ 洞察活跃用户真实关注点
-       └─ 生成用户洞察报告 → /app/data/xhs_user_insights.md
-```
+### Docker 服务列表
 
-**管道三：RAG 保险问答**
-```
-nat run --config_file workflow_rag.yaml
-  └─ GLM 5 调用工具：
-       ├─ search_insurance()  → MilvusRetriever 检索 PDF 知识库
-       └─ browser tools       → 实时查询最新信息（兜底补充）
-```
-
-### 使用的 NAT 核心组件
-
-| 组件 | 来源 | 用途 |
+| 服务 | 说明 | 端口 |
 |------|------|------|
-| `MilvusRetriever` | `nat.retriever.milvus` | 向量检索 |
-| `FastMCP` | `nvidia_nat_fastmcp` | MCP 服务框架 |
-| `react_agent` | `nvidia_nat_core` | LLM 驱动 Agent |
-| `NVIDIAEmbedding` | `llama-index-embeddings-nvidia` | 文本向量化 |
+| `nat-ui` | NeMo Agent Toolkit UI 前端 | 4000 |
+| `nat-orchestrator` | 主调度 Agent（qwen-plus + RAG） | 8100 |
+| `milvus-standalone` | 向量数据库 | 19530 |
+| `milvus-minio` | Milvus 对象存储 | — |
+| `milvus-etcd` | Milvus 元数据存储 | — |
+| `nat-api` | FastAPI 后端（知识库管理接口） | 8000 |
+
+---
+
+## 知识库内容
+
+共 **33 份宏利香港官方 PDF**，**2,438 个语义分块**，按险种分类：
+
+| 险种 | category 值 | 主要产品 |
+|------|-------------|----------|
+| 寿险 | `life` | ManuTerm 定期寿险、Universal Life 万能寿险、La Vie 2、ManuCentury |
+| 储蓄与年金 | `savings` | FlexiFortune、Genesis / Genesis Centurion、Harvest Saver、ManuGlobal Saver、ManuLeisure 退休年金、Prestige Achiever / Preserver、Future Assure |
+| 医疗 & VHIS | `medical` | VHIS First 灵活计划、VHIS Shelter 标准计划、Supreme VHIS Premium / Lite、医疗转介、诊断影像指引、医院名单 |
+| 危疾 & 综合 | `critical` | ManuPremier Protector、Whole-in-One Prime 3、ManuDelight HK、失能护理服务 |
+| 通用附件 | `""` | 身故赔偿、紧急援助条款、连续保单持有人权益 |
 
 ---
 
@@ -65,97 +62,66 @@ nat run --config_file workflow_rag.yaml
 
 ### 前置条件
 
-- Docker Desktop 已安装并运行
-- 拥有 NVIDIA API Key（注册：https://build.nvidia.com）
-- （可选）小红书账号 Cookie（用于爬取完整内容）
+- Docker Desktop（已安装并运行）
+- NVIDIA NIM API Key（用于向量 embedding，获取：https://build.nvidia.com）
+- 阿里云百炼 API Key（用于 qwen-plus LLM）
 
 ### 第一步：配置环境变量
 
-在项目根目录创建 `.env` 文件：
+编辑项目根目录的 `.env` 文件：
 
-```bash
-# .env
+```env
+# NVIDIA NIM API Key（向量模型 nv-embedqa-e5-v5 必需）
 NVIDIA_API_KEY=nvapi-xxxxxxxxxxxxxxxxxxxx
-XHS_COOKIES=               # 可选，小红书登录 Cookie
+
+# 阿里云百炼 API Key（qwen-plus LLM 必需）
+DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxx
 ```
 
-### 第二步：构建并启动所有服务
+### 第二步：启动所有服务
 
 ```bash
-docker-compose up -d --build
+docker-compose up -d
 ```
 
-等待所有服务健康（约 2-3 分钟）：
+等待所有服务就绪（约 30-60 秒），检查状态：
 
 ```bash
 docker-compose ps
-# 期望所有服务状态为 healthy 或 running
+# 期望：nat-ui、nat-orchestrator、milvus-standalone(healthy)、nat-api 全部运行
 ```
 
-### 第三步：进入应用容器
+### 第三步：访问系统
+
+打开浏览器：**http://localhost:4000**
+
+直接提问即可，例如：
+- "ManuTerm 定期寿险的保障内容是什么？"
+- "VHIS 自愿医保和普通医保有什么区别？"
+- "年金险如何帮助退休规划？"
+- "比较 ManuPremier Protector 和 Whole-in-One Prime"
+
+---
+
+## PDF 知识库管理
+
+### 查看当前知识库状态
 
 ```bash
-docker exec -it nat-app bash
+# 进入 orchestrator 容器执行检查
+docker exec nat-orchestrator python check_categories.py
 ```
 
-### 第四步：将 PDF 产品手册向量化入库（RAG 主数据源）
+### 重新入库所有 PDF
 
 ```bash
-# 将 manupremier-protector.pdf 解析并入库
-python rag_ingest.py
+# 批量入库 PDF 目录下所有产品手册
+docker exec nat-orchestrator bash /app/ingest_all.sh
 
-# 清空旧数据后重新入库（全量更新）
-python rag_ingest.py --clear
-
-# 同时入库小红书数据作为补充（需先运行洞察 workflow）
-python rag_ingest.py --include-xhs
+# 或进入容器手动执行
+docker exec -it nat-orchestrator bash
+python rag_ingest.py --pdf-path /app/PDF/your-file.pdf --no-mineru
 ```
-
-### 第五步：小红书内容采集
-
-#### 5a. 首次登录（仅需执行一次）
-
-采用 **Docker 内 noVNC** 方案，无需宿主机图形界面：
-
-```bash
-# 启动登录助手容器（会自动构建镜像，约 2-3 分钟）
-docker-compose --profile login up xhs-login --build
-```
-
-启动后：
-1. 用浏览器打开 **http://localhost:6080**
-2. 在网页中可以看到 Chromium 浏览器，手动完成小红书登录（扫码或账号密码）
-3. 确认登录成功后，**在另一终端**执行：`docker exec xhs-login touch /app/data/xhs_login_trigger`
-4. 会话自动保存至共享卷 `/app/data/xhs_state.json`
-
-> 详细步骤与常见问题见 [docs/xhs-login.md](docs/xhs-login.md)。会话有效期通常为 30 天，过期后重复此步骤即可。
-
-#### 5b. 运行爬虫（登录后每次使用）
-
-```bash
-# 进入 nat-app 容器
-docker exec -it nat-app bash
-
-# 运行爬虫（NAT React Agent 自动加载登录态、采集帖子/用户/评论）
-nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
-```
-
-爬虫会：
-- 自动加载 `/app/data/xhs_state.json` 恢复登录状态
-- 依次搜索：保险、重疾险、医疗险、寿险推荐、买保险踩坑
-- 每个关键词采集 5-10 篇帖子（含正文、评论、互动数、作者信息）
-- 将结果结构化存入 PostgreSQL（xhs_posts / xhs_users / xhs_comments）
-
-### 第六步：启动 RAG 问答
-
-```bash
-nat run --config_file workflow_rag.yaml
-```
-
-GLM 5 将等待你的问题，例如：
-- "重疾险和医疗险有什么区别？"
-- "车险理赔流程是什么？"
-- "年轻人第一份保险应该买什么？"
 
 ---
 
@@ -163,25 +129,37 @@ GLM 5 将等待你的问题，例如：
 
 ```
 capstoneProject/
-├── docker-compose.yml          # Docker 编排（etcd + minio + milvus + app + api + frontend + xhs-login）
-├── Dockerfile                  # 主应用镜像（Python 3.11 + Node.js + NAT + agent-browser）
-├── Dockerfile.login            # 登录助手镜像（主镜像 + Xvfb + x11vnc + noVNC）
-├── agent_browser_mcp.py        # 浏览器 FastMCP 服务（--session-name xhs，含 state_load/state_save）
-├── xhs_login_helper.py         # 小红书登录助手脚本（配合 xhs-login 容器使用）
-├── rag_mcp.py                  # RAG 检索 FastMCP 服务（MilvusRetriever）
-├── rag_ingest.py               # 数据向量化入库脚本
-├── workflow_browser.yaml       # 通用浏览器 Workflow
-├── workflow_scraper.yaml       # 小红书爬虫 Workflow（NAT React Agent + GLM-5）
-├── workflow_rag.yaml           # RAG 保险问答 Workflow
-├── api.py                      # FastAPI 后端（RAG + 知识库管理 + 小红书数据接口）
-├── frontend/                   # Next.js 前端（Pinecone 风格 SaaS UI）
-├── packages/                   # NVIDIA NAT 本地包
-│   ├── nvidia_nat_core/
-│   ├── nvidia_nat_mcp/
-│   ├── nvidia_nat_fastmcp/
-│   ├── nvidia_nat_llama_index/
-│   └── ...（其他 NAT 包）
-└── README.md
+├── docker-compose.yml              # Docker 编排
+├── Dockerfile                      # 主应用镜像（Python 3.11 + NAT）
+│
+├── workflow_orchestrator.yaml      # 主调度 Agent（tool_calling_agent + qwen-plus）
+├── workflow_agent_life.yaml        # 寿险专业 Agent（备用）
+├── workflow_agent_savings.yaml     # 储蓄险专业 Agent（备用）
+├── workflow_agent_medical.yaml     # 医疗险专业 Agent（备用）
+├── workflow_agent_critical.yaml    # 危疾险专业 Agent（备用）
+│
+├── rag_mcp.py                      # RAG 检索 MCP 服务（category-aware Milvus 检索）
+├── agent_router_mcp.py             # Agent 路由 MCP 工具（HTTP 路由到专业 Agent）
+├── rag_ingest.py                   # PDF 向量化入库脚本
+├── ingest_all.sh                   # 批量 PDF 入库脚本
+├── check_categories.py             # 知识库分类统计诊断脚本
+│
+├── api.py                          # FastAPI 后端（知识库管理接口，端口 8000）
+│
+├── nat-ui/                         # NeMo Agent Toolkit UI（Next.js 前端）
+│   ├── .env                        # UI 环境变量配置
+│   └── public/content/
+│       ├── welcome.md              # 欢迎页内容
+│       └── promptSuggestions.json  # 提示词建议
+│
+├── PDF/                            # 宏利香港保险产品 PDF（33 份）
+│
+└── packages/                       # NVIDIA NAT 本地包
+    ├── nvidia_nat_core/
+    ├── nvidia_nat_mcp/
+    ├── nvidia_nat_fastmcp/
+    ├── nvidia_nat_langchain/
+    └── nvidia_nat_llama_index/
 ```
 
 ---
@@ -190,40 +168,69 @@ capstoneProject/
 
 | 变量 | 必需 | 说明 |
 |------|------|------|
-| `NVIDIA_API_KEY` | 是 | NVIDIA NIM API 密钥（GLM 5 + 向量模型共用） |
-| `XHS_COOKIES` | 否 | 小红书登录 Cookie（提升爬取质量） |
+| `NVIDIA_API_KEY` | 是 | NVIDIA NIM 密钥，用于向量模型 `nv-embedqa-e5-v5`（embedding） |
+| `DASHSCOPE_API_KEY` | 是 | 阿里云百炼密钥，用于 `qwen-plus` LLM（问答生成） |
 | `MILVUS_HOST` | 否 | Milvus 主机（Docker 内默认 `milvus`） |
 | `MILVUS_PORT` | 否 | Milvus 端口（默认 `19530`） |
 
 ---
 
-## 数据更新
+## 技术栈
 
-当需要更新知识库中的保险内容时，重新执行采集和入库流程：
-
-```bash
-# 进入容器
-docker exec -it nat-app bash
-
-# 重新爬取（覆盖旧 JSON）
-nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
-
-# 清空旧向量数据并重新入库
-python rag_ingest.py --clear
-```
+| 层级 | 技术选型 | 版本/说明 |
+|------|----------|-----------|
+| **LLM** | `qwen-plus`（阿里云百炼） | OpenAI 兼容接口，中文最优 |
+| **Embedding** | NVIDIA NIM `nv-embedqa-e5-v5` | 1024 维向量，语义检索 |
+| **向量数据库** | Milvus Standalone | 2,438 个分块，category 过滤 |
+| **Agent 框架** | NVIDIA NeMo Agent Toolkit | `tool_calling_agent` 工作流 |
+| **MCP 工具** | FastMCP | RAG 检索工具服务 |
+| **前端** | NeMo Agent Toolkit UI | Next.js 14，OpenAI 兼容接入 |
+| **后端** | FastAPI | 知识库管理 REST API |
+| **容器编排** | Docker Compose | 一键启动全部服务 |
 
 ---
 
 ## 常见问题
 
-**Q: docker-compose up 后 milvus 服务一直不健康**
-A: Milvus Standalone 启动较慢，等待约 2-3 分钟后再检查。如果仍有问题，运行 `docker-compose logs milvus` 查看日志。
+**Q: 系统访问很慢或超时**  
+A: `qwen-plus` 首次响应约 15-25 秒。若超时，检查 `DASHSCOPE_API_KEY` 是否正确，以及网络是否可访问 `dashscope.aliyuncs.com`。
 
-**Q: nat run --config_file workflow_scraper.yaml 提示需要登录小红书 / state 文件不存在**
-A: 请先执行登录步骤：`docker-compose --profile login up xhs-login --build`，打开 http://localhost:6080 完成登录后，在另一终端执行 `docker exec xhs-login touch /app/data/xhs_login_trigger` 保存会话，详见 [docs/xhs-login.md](docs/xhs-login.md)。
+**Q: 回答说"知识库未找到相关内容"**  
+A: PDF 可能未入库。执行 `docker exec nat-orchestrator python check_categories.py` 检查知识库状态，如为空则运行 `ingest_all.sh` 重新入库。
 
-**Q: rag_ingest.py 提示数据文件不存在**
-A: 请先运行 `nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"` 完成爬取，再运行入库脚本。
+**Q: Milvus 健康检查失败**  
+A: Milvus Standalone 启动较慢，等待约 2-3 分钟。查看日志：`docker-compose logs milvus-standalone`。
 
-**Q: RAG 回答时提示知识库未找到相关内容**
-A: 确认已完成入库步骤。可运行 `get_collection_stats()` 工具检查知识库状态。
+**Q: 如何更换为更强的模型（如 qwen-max）？**  
+A: 修改 `workflow_orchestrator.yaml` 中的 `model_name: qwen-plus` 为 `qwen-max`，然后执行 `docker-compose restart nat-orchestrator`。
+
+**Q: 如何添加新的保险产品 PDF？**  
+A: 将 PDF 放入 `PDF/` 目录，执行：
+```bash
+docker exec nat-orchestrator python rag_ingest.py --pdf-path /app/PDF/new-product.pdf --no-mineru
+```
+
+---
+
+## 开发说明
+
+### 本地修改 Workflow（无需重建镜像）
+
+所有 `workflow_*.yaml` 和 `rag_mcp.py` 均通过 Docker volume 挂载，修改后直接重启容器即可：
+
+```bash
+# 修改 workflow_orchestrator.yaml 后
+docker-compose restart nat-orchestrator
+```
+
+### 查看 Agent 运行日志
+
+```bash
+docker-compose logs -f nat-orchestrator
+```
+
+### API 文档
+
+FastAPI 后端（端口 8000）提供 Swagger 文档：http://localhost:8000/docs
+
+NAT Orchestrator OpenAPI：http://localhost:8100/openapi.json
