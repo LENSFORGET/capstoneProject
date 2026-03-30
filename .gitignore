@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# Google Workspace CLI OAuth 凭据（敏感，勿提交）
+gws_credentials.json
+client_secret_*.json
+
 # Windows reserved names
 nul
 con

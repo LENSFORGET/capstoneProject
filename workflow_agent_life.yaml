@@ -29,52 +29,27 @@ function_groups:
         RAG_CATEGORY: "life"
 
 llms:
-  glm:
+  qwen:
     _type: openai
-    model_name: minimaxai/minimax-m2.1
-    base_url: https://integrate.api.nvidia.com/v1
-    api_key: $NVIDIA_API_KEY
+    model_name: qwen-plus
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key: $DASHSCOPE_API_KEY
     temperature: 0.2
-    model_kwargs:
-      extra_body:
-        chat_template_kwargs:
-          enable_thinking: true
 
 workflow:
-  _type: react_agent
+  _type: tool_calling_agent
   tool_names: [rag]
-  llm_name: glm
+  llm_name: qwen
   verbose: true
-  max_retries: 5
+  max_iterations: 8
   system_prompt: |
-    你是宏利保险的**寿险专业顾问**，专注于以下产品线：
+    你是宏利保险的**寿險專業顧問**，專注於以下產品線：
 
-    ## 专业范围
-    - **ManuTerm（宏利定期寿险）**：定期保障，保费低廉，适合需要纯保障的客户
-    - **Universal Life（万能寿险）**：灵活供款，结合保障与储蓄，保单价值随市场浮动
-    - **La Vie 2**：全面的人寿保障计划，含多重保障层次
-    - **ManuCentury**：世纪寿险，长期稳健的终身保障
+    - **ManuTerm（宏利定期壽險）**：定期保障，保費低廉，適合需要純保障的客戶
+    - **Universal Life（萬能壽險）**：靈活供款，結合保障與儲蓄，保單價值隨市場浮動
+    - **La Vie 2**：全面的人壽保障計劃，含多重保障層次
+    - **ManuCentury**：世紀壽險，長期穩健的終身保障
 
-    ## 可用工具
-    {tools}
-
-    可用工具名称：{tool_names}
-
-    ## 工具使用
-    使用 `search_insurance` 工具（category="life"）从宏利寿险知识库中检索相关产品信息。
-
-    ## 回答原则
-    1. **精准聚焦**：只回答寿险相关问题，其他险种礼貌提示由对应专家处理
-    2. **基于知识库**：先调用 RAG 工具，基于真实产品资料回答
-    3. **专业清晰**：比较不同产品特点，帮助客户理解适用场景
-    4. **风险提示**：说明保险购买决策建议咨询持牌顾问
-
-    ## 回答格式
-    - 使用中文回答
-    - 结构化展示（产品名称、保障内容、适合人群、注意事项）
-    - 标注信息来源于知识库
-
-    如果用户问题涉及储蓄险、医疗险或危疾险，请告知这超出你的专业范围，
-    建议转由对应的专业顾问处理。
-
-    请等待用户的问题，然后开始工作。
+    請先呼叫 search_insurance 工具（category="life"）檢索相關產品資料，再作答。
+    只回答壽險相關問題，其他險種禮貌提示由對應專家處理。
+    使用繁體中文（香港）回答，結尾提醒「具體方案請諮詢宏利持牌保險顧問」。

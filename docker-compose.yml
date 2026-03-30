@@ -30,6 +30,7 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    restart: unless-stopped
     networks:
       - milvus-net
 
@@ -50,6 +51,7 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    restart: unless-stopped
     networks:
       - milvus-net
 
@@ -79,6 +81,7 @@ services:
       timeout: 20s
       retries: 10
       start_period: 60s
+    restart: unless-stopped
     networks:
       - milvus-net
 
@@ -404,6 +407,30 @@ services:
       - ./nat-ui/.env
     ports:
       - "4000:3000"
+    depends_on:
+      - nat-orchestrator
+    restart: unless-stopped
+    networks:
+      - milvus-net
+
+  # -----------------------------------------------------------------------
+  # 9. nat-email-agent - 宏利保险 AI 邮件自动回复服务
+  # 功能：轮询 Gmail 收件箱 → 调用 RAG Orchestrator → 自动回复客户邮件
+  # 前提：需在宿主机先运行 gws auth login 并导出 gws_credentials.json
+  #       详见 README 中 "Gmail 邮件自动回复" 章节
+  # -----------------------------------------------------------------------
+  nat-email-agent:
+    container_name: nat-email-agent
+    build:
+      context: .
+      dockerfile: Dockerfile.email
+    environment:
+      - GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/app/gws_credentials.json
+      - ORCHESTRATOR_URL=http://nat-orchestrator:8100
+      - POLL_INTERVAL_SECONDS=30
+    volumes:
+      - ./gws_credentials.json:/app/gws_credentials.json:ro
+      - ./email_agent.py:/app/email_agent.py:ro
     depends_on:
       - nat-orchestrator
     restart: unless-stopped

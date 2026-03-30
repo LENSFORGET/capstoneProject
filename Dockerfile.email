@@ -1,0 +1,39 @@
+# ---------------------------------------------------------------------------
+# Dockerfile.email — 宏利保险 AI 邮件自动回复服务镜像
+#
+# 轻量级镜像：Node.js 20 (slim) + Python 3 + gws CLI + requests
+# 不包含 AI/ML 依赖（推理由 nat-orchestrator 负责）
+# ---------------------------------------------------------------------------
+FROM node:20-slim
+
+# 设置环境变量
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# 安装 Python 3 和 pip
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Google Workspace CLI
+RUN npm install -g @googleworkspace/cli
+
+# 安装 Python 依赖（requests 用于调用 nat-orchestrator HTTP API）
+RUN pip3 install --no-cache-dir --break-system-packages \
+    requests>=2.31.0
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制邮件 Agent 脚本（docker-compose 也会 volume mount 覆盖，支持热更新）
+COPY email_agent.py /app/email_agent.py
+
+# 健康检查：确认 gws CLI 可用
+HEALTHCHECK --interval=60s --timeout=10s --start-period=15s --retries=3 \
+    CMD gws --version || exit 1
+
+CMD ["python3", "-u", "email_agent.py"]

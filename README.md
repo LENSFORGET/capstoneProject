@@ -4,13 +4,15 @@
 系统以 33 份官方产品手册 PDF 为知识库，通过阿里云百炼 `qwen-plus` 大模型 + NVIDIA NIM 向量检索，
 提供覆盖寿险、储蓄险、医疗险、危疾险全险种的专业中文保险咨询服务。
 
-**访问地址：http://localhost:4000**
+**Web 端访问：http://localhost:4000**
+**邮件自动回复：监听 Gmail 收件箱，自动 RAG 回复客户来信**
 
 ---
 
 ## 系统架构
 
 ```
+[ Web 端 ]
 用户问题
   │
   ▼
@@ -25,10 +27,19 @@ rag_mcp.py（FastMCP）
   │  category-aware 向量检索
   ▼
 Milvus（向量数据库，端口 19530）
-  └─ insurance_docs 集合
-       ├─ 33 份宏利香港 PDF 手册
-       ├─ 2,438 个语义分块
-       └─ NVIDIA NIM nv-embedqa-e5-v5 向量化
+  └─ insurance_docs 集合（33 份 PDF，2,438 个语义分块）
+
+[ 邮件自动回复 ]
+Gmail 收件箱（客户来信）
+  │  gws gmail 轮询（每 30 秒）
+  ▼
+nat-email-agent（email_agent.py）
+  │  HTTP POST /generate
+  ▼
+nat-orchestrator:8100（RAG 检索 + qwen-plus 生成）
+  │
+  ▼
+gws gmail +reply → 自动回信给客户
 ```
 
 ### Docker 服务列表
@@ -37,10 +48,15 @@ Milvus（向量数据库，端口 19530）
 |------|------|------|
 | `nat-ui` | NeMo Agent Toolkit UI 前端 | 4000 |
 | `nat-orchestrator` | 主调度 Agent（qwen-plus + RAG） | 8100 |
-| `milvus-standalone` | 向量数据库 | 19530 |
-| `milvus-minio` | Milvus 对象存储 | — |
-| `milvus-etcd` | Milvus 元数据存储 | — |
+| `nat-email-agent` | Gmail 邮件自动回复服务 | — |
+| `milvus-standalone` | 向量数据库（自动重启） | 19530 |
+| `milvus-minio` | Milvus 对象存储（自动重启） | — |
+| `milvus-etcd` | Milvus 元数据存储（自动重启） | — |
 | `nat-api` | FastAPI 后端（知识库管理接口） | 8000 |
+| `nat-agent-life` | 寿险专业 Agent（备用，端口 8101） | 8101 |
+| `nat-agent-savings` | 储蓄险专业 Agent（备用） | 8102 |
+| `nat-agent-medical` | 医疗险专业 Agent（备用） | 8103 |
+| `nat-agent-critical` | 危疾险专业 Agent（备用） | 8104 |
 
 ---
 
@@ -103,6 +119,63 @@ docker-compose ps
 
 ---
 
+## Gmail 邮件自动回复
+
+`nat-email-agent` 服务会自动监控 Gmail 收件箱，对客户来信用 RAG 知识库生成专业保险回复。
+
+### 一次性认证设置
+
+> 前提：需在本机安装 Node.js 18+
+
+```bash
+# 1. 安装 Google Workspace CLI
+npm install -g @googleworkspace/cli
+
+# 2. 创建 GCP 项目（需要 gcloud CLI）并设置 Gmail API
+gws auth setup
+
+# 若无 gcloud，可手动在 Google Cloud Console 创建 OAuth 凭据：
+#   https://console.cloud.google.com/apis/credentials
+#   应用类型选 "Desktop app"，下载 JSON 放到：
+#   C:\Users\<用户名>\.config\gws\client_secret.json
+
+# 3. 授权 Gmail 读写权限
+gws auth login -s gmail
+
+# 4. 导出凭据到项目根目录
+gws auth export --unmasked > gws_credentials.json
+```
+
+> `gws_credentials.json` 包含 OAuth token，已加入 `.gitignore`，请勿提交到版本库。
+
+### 启动邮件服务
+
+```bash
+docker-compose up -d --build nat-email-agent
+
+# 查看实时日志
+docker-compose logs -f nat-email-agent
+```
+
+### 工作原理
+
+1. 每 30 秒轮询 Gmail 收件箱中未读且未标记 `AI-Processed` 的邮件
+2. 解析来信内容（发件人、主题、正文）
+3. 调用 `nat-orchestrator:8100/generate` 通过 RAG 生成专业回复
+4. 自动检测来信语言（中文 / 英文），以相同语言回复
+5. 使用 `gws gmail +reply` 发送正式邮件回复（自动维护邮件线程）
+6. 为原邮件添加 `AI-Processed` 标签，防止重复处理
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE` | `/app/gws_credentials.json` | OAuth 凭据路径 |
+| `ORCHESTRATOR_URL` | `http://nat-orchestrator:8100` | Orchestrator 地址 |
+| `POLL_INTERVAL_SECONDS` | `30` | 轮询间隔（秒） |
+
+---
+
 ## PDF 知识库管理
 
 ### 查看当前知识库状态
@@ -129,15 +202,17 @@ python rag_ingest.py --pdf-path /app/PDF/your-file.pdf --no-mineru
 
 ```
 capstoneProject/
-├── docker-compose.yml              # Docker 编排
+├── docker-compose.yml              # Docker 编排（含 nat-email-agent 服务）
 ├── Dockerfile                      # 主应用镜像（Python 3.11 + NAT）
+├── Dockerfile.email                # 邮件 Agent 镜像（Node.js 20 + Python 3 + gws）
 │
 ├── workflow_orchestrator.yaml      # 主调度 Agent（tool_calling_agent + qwen-plus）
-├── workflow_agent_life.yaml        # 寿险专业 Agent（备用）
+├── workflow_agent_life.yaml        # 寿险专业 Agent（tool_calling_agent，备用）
 ├── workflow_agent_savings.yaml     # 储蓄险专业 Agent（备用）
 ├── workflow_agent_medical.yaml     # 医疗险专业 Agent（备用）
 ├── workflow_agent_critical.yaml    # 危疾险专业 Agent（备用）
 │
+├── email_agent.py                  # Gmail 邮件自动回复服务（gws + orchestrator）
 ├── rag_mcp.py                      # RAG 检索 MCP 服务（category-aware Milvus 检索）
 ├── agent_router_mcp.py             # Agent 路由 MCP 工具（HTTP 路由到专业 Agent）
 ├── rag_ingest.py                   # PDF 向量化入库脚本
@@ -145,6 +220,8 @@ capstoneProject/
 ├── check_categories.py             # 知识库分类统计诊断脚本
 │
 ├── api.py                          # FastAPI 后端（知识库管理接口，端口 8000）
+│
+├── gws_credentials.json            # Gmail OAuth 凭据（本地生成，已加入 .gitignore）
 │
 ├── nat-ui/                         # NeMo Agent Toolkit UI（Next.js 前端）
 │   ├── .env                        # UI 环境变量配置
@@ -172,6 +249,9 @@ capstoneProject/
 | `DASHSCOPE_API_KEY` | 是 | 阿里云百炼密钥，用于 `qwen-plus` LLM（问答生成） |
 | `MILVUS_HOST` | 否 | Milvus 主机（Docker 内默认 `milvus`） |
 | `MILVUS_PORT` | 否 | Milvus 端口（默认 `19530`） |
+| `GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE` | 邮件功能必需 | gws OAuth 凭据路径，容器内默认 `/app/gws_credentials.json` |
+| `ORCHESTRATOR_URL` | 否 | Email Agent 调用的 Orchestrator 地址（默认 `http://nat-orchestrator:8100`） |
+| `POLL_INTERVAL_SECONDS` | 否 | Gmail 轮询间隔秒数（默认 `30`） |
 
 ---
 
@@ -208,6 +288,23 @@ A: 修改 `workflow_orchestrator.yaml` 中的 `model_name: qwen-plus` 为 `qwen-
 A: 将 PDF 放入 `PDF/` 目录，执行：
 ```bash
 docker exec nat-orchestrator python rag_ingest.py --pdf-path /app/PDF/new-product.pdf --no-mineru
+```
+
+**Q: 邮件自动回复服务提示 "gws command failed"**  
+A: OAuth token 可能已过期。在宿主机重新执行：
+```bash
+gws auth login -s gmail
+gws auth export --unmasked > gws_credentials.json
+docker-compose restart nat-email-agent
+```
+
+**Q: 邮件回复内容包含 Markdown 符号（**加粗**、## 标题等）**  
+A: `email_agent.py` 内置了 `_clean_reply()` 清理函数，会自动移除 Markdown 格式。若仍有问题，查看日志：`docker-compose logs nat-email-agent`。
+
+**Q: Docker 重启后 Milvus 不自动启动**  
+A: 已通过 `restart: unless-stopped` 策略解决。若仍有问题，手动执行：
+```bash
+docker-compose up -d etcd minio milvus
 ```
 
 ---
