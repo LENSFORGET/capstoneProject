@@ -93,7 +93,7 @@
 ### 3.3 架构与运维
 
 - **采集与 RAG 数据分离**：小红书数据默认存入 PostgreSQL，不入 RAG；需显式 `--include-xhs` 才会向量化入库，容易造成理解偏差。
-- **Windows 环境适配**：端口 3000 可能被保留，前端使用 4000；docker-compose 中 api 启用 WATCHFILES_FORCE_POLLING 以应对挂载 I/O 问题。
+- **Windows 环境适配**：端口 3000 可能被保留，前端使用 14000（原 4000 端口同样在 Windows 保留范围内）；docker-compose 中 api 启用 WATCHFILES_FORCE_POLLING 以应对挂载 I/O 问题。
 - **GPU 预留**：ui、api 服务配置了 GPU 预留，在无 GPU 环境下可能影响启动，需根据实际环境调整。
 - **NAT 包可编辑安装**：packages 下 NAT 包以 -e 安装，需 SETUPTOOLS_SCM_PRETEND_VERSION 等环境变量，对新人上手有一定门槛。
 
@@ -137,7 +137,7 @@
 | 小红书采集 | `nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"` |
 | RAG 问答 | `nat run --config_file workflow_rag.yaml` |
 | 登录助手 | `docker-compose --profile login up xhs-login`，http://localhost:6080 |
-| 前端 | http://localhost:4000 |
+| 前端 | http://localhost:14000 |
 | API | http://localhost:8000 |
 | 测试 | `docker-compose run --rm test` |
 

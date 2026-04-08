@@ -4,7 +4,7 @@
 系统以 33 份官方产品手册 PDF 为知识库，通过阿里云百炼 `qwen-plus` 大模型 + NVIDIA NIM 向量检索，
 提供覆盖寿险、储蓄险、医疗险、危疾险全险种的专业中文保险咨询服务。
 
-**Web 端访问：http://localhost:4000**
+**Web 端访问：http://localhost:14000**
 **邮件自动回复：监听 Gmail 收件箱，自动 RAG 回复客户来信**
 
 ---
@@ -16,7 +16,7 @@
 用户问题
   │
   ▼
-nat-ui（NeMo Agent Toolkit UI，端口 4000）
+nat-ui（NeMo Agent Toolkit UI，端口 14000）
   │  HTTP
   ▼
 nat-orchestrator（tool_calling_agent，端口 8100）
@@ -46,7 +46,7 @@ gws gmail +reply → 自动回信给客户
 
 | 服务 | 说明 | 端口 |
 |------|------|------|
-| `nat-ui` | NeMo Agent Toolkit UI 前端 | 4000 |
+| `nat-ui` | NeMo Agent Toolkit UI 前端 | 14000 |
 | `nat-orchestrator` | 主调度 Agent（qwen-plus + RAG） | 8100 |
 | `nat-email-agent` | Gmail 邮件自动回复服务 | — |
 | `milvus-standalone` | 向量数据库（自动重启） | 19530 |
@@ -109,7 +109,7 @@ docker-compose ps
 
 ### 第三步：访问系统
 
-打开浏览器：**http://localhost:4000**
+打开浏览器：**http://localhost:14000**
 
 直接提问即可，例如：
 - "ManuTerm 定期寿险的保障内容是什么？"

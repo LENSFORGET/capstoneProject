@@ -16,7 +16,7 @@ The system provides an AI-powered insurance Q&A service backed by:
 ## Architecture
 
 ```
-User → nat-ui (port 4000) → nat-orchestrator (port 8100)
+User → nat-ui (port 14000) → nat-orchestrator (port 8100)
                                     ↓  tool_calling_agent + qwen-plus
                                rag_mcp.py (FastMCP, stdio)
                                     ↓  category-aware vector search
@@ -28,7 +28,7 @@ User → nat-ui (port 4000) → nat-orchestrator (port 8100)
 
 | Service | Purpose | Port |
 |---------|---------|-------|
-| `nat-ui` | NeMo Agent Toolkit UI (Next.js) | 4000 |
+| `nat-ui` | NeMo Agent Toolkit UI (Next.js) | 14000 |
 | `nat-orchestrator` | Main agent (tool_calling_agent + qwen-plus) | 8100 |
 | `milvus-standalone` | Vector database | 19530 |
 | `milvus-minio` | Milvus object storage | — |
