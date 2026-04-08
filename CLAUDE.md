@@ -183,3 +183,5 @@ The orchestrator handles intent recognition AND RAG retrieval directly, reducing
 3. **No MinerU in agents**: Agent containers use `--no-mineru` flag for ingestion to avoid CUDA dependency.
 4. **UI env vars baked at build**: NEXT_PUBLIC_* vars in `nat-ui/.env` require image rebuild when changed.
 5. **Specialist agents**: nat-agent-life/savings/medical/critical are configured but stopped. Start with `docker-compose start nat-agent-life` etc. if needed for debugging.
+6. **DO NOT UPGRADE THE FRAMEWORK**: The NAT framework is locked at v0.0.1. Upgrading to newer versions (e.g., v1.5.0) will cause massive breaking changes to `workflow_orchestrator.yaml` and `rag_mcp.py`. The current `qwen-plus` setup is stable and works perfectly for this Capstone project.
+7. **nat-ui is Highly Customized**: The UI has been heavily modified with full `zh-HK`/`en` i18n using `next-i18next`, and state persistence has been migrated from `sessionStorage` to `localStorage`. Do not pull the latest `nat-ui` from upstream, as it will overwrite these critical localization and persistence fixes.

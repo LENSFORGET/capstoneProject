@@ -395,7 +395,7 @@ services:
 
   # -----------------------------------------------------------------------
   # NeMo Agent Toolkit UI（官方前端，替代旧 frontend 服务）
-  # 访问地址：http://localhost:4000
+  # 访问地址：http://localhost:14000（4000 常落在 Windows/Hyper-V 保留端口段 3962–4061 内，故改用 14000）
   # 后端：nat-orchestrator:8100（多 Agent RAG 系统）
   # -----------------------------------------------------------------------
   nat-ui:
@@ -406,7 +406,7 @@ services:
     env_file:
       - ./nat-ui/.env
     ports:
-      - "4000:3000"
+      - "14000:3000"
     depends_on:
       - nat-orchestrator
     restart: unless-stopped
