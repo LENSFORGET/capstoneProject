@@ -2,7 +2,7 @@
 
 A Manulife Hong Kong insurance RAG Q&A system built with **NVIDIA NeMo Agent Toolkit (NAT)**.
 
-The system uses **33 official product PDFs** as its knowledge base and combines Alibaba Cloud Bailian `qwen-plus` with NVIDIA NIM embeddings to provide professional insurance advisory answers across life, savings, medical, and critical illness products.
+The system uses **32 official product PDFs** as its knowledge base and combines Alibaba Cloud Bailian `qwen-plus` with NVIDIA NIM embeddings to provide professional insurance advisory answers across life, savings, medical, and critical illness products.
 
 **Web access:** http://localhost:14000  
 **Email auto-reply:** Monitors Gmail inbox and generates RAG-based replies automatically.
@@ -27,7 +27,7 @@ rag_mcp.py (FastMCP)
   │  category-aware vector retrieval
   ▼
 Milvus (vector database, port 19530)
-  └─ insurance_docs collection (33 PDFs, 2,438 semantic chunks)
+  └─ insurance_docs collection (32 PDFs, 2,438 semantic chunks)
 
 [Email Auto-Reply]
 Gmail inbox (customer emails)
@@ -62,7 +62,7 @@ gws gmail +reply → automatic customer reply
 
 ## Knowledge Base
 
-The knowledge base contains **33 official Manulife HK PDFs** and **2,438 semantic chunks**, grouped by category:
+The knowledge base contains **32 official Manulife HK PDFs** and **2,438 semantic chunks**, grouped by category:
 
 | Insurance Type | `category` Value | Main Products |
 |----------------|------------------|---------------|
@@ -94,7 +94,9 @@ NVIDIA_API_KEY=nvapi-xxxxxxxxxxxxxxxxxxxx
 DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxx
 ```
 
-### Step 2: Start All Services
+### Step 2: Start All Services (Recommended)
+
+We **strongly recommend** using Docker as the primary installation method, as it automatically handles the complex dependencies (Node.js, Playwright, Milvus, etcd, MinIO, PostgreSQL, NAT).
 
 ```bash
 docker-compose up -d
@@ -106,6 +108,13 @@ Wait about 30–60 seconds, then check service status:
 docker-compose ps
 # Expected: nat-ui, nat-orchestrator, milvus-standalone (healthy), nat-api are running
 ```
+
+#### Alternative: Local Development without Docker
+If you prefer to run the project locally without Docker, you can use the provided `requirements.txt`:
+```bash
+pip install -r requirements.txt
+```
+**Warning:** Running locally requires you to manually set up and configure Milvus and PostgreSQL. You must also manually install the `nvidia-nat-*` packages from the `packages/` directory in editable mode. See `requirements.txt` for details.
 
 ### Step 3: Open the System
 
@@ -229,7 +238,7 @@ capstoneProject/
 │       ├── welcome.md              # Welcome page content
 │       └── promptSuggestions.json  # Prompt suggestions
 │
-├── PDF/                            # Manulife HK insurance PDFs (33 files)
+├── PDF/                            # Manulife HK insurance PDFs (32 files)
 │
 └── packages/                       # Local NVIDIA NAT packages
     ├── nvidia_nat_core/
