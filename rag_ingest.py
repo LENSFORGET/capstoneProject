@@ -717,7 +717,7 @@ def main() -> None:
     parser.add_argument(
         "--include-xhs",
         action="store_true",
-        help='同时将小红书爬取数据入库（需先运行 nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"）',
+        help=r"同时将小红书爬取数据入库（本地模式需先运行 .\scripts\run-xhs-scraper.ps1）",
     )
     parser.add_argument(
         "--xhs-path",

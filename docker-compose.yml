@@ -260,8 +260,11 @@ services:
   nat-agent-life:
     container_name: nat-agent-life
     image: capstoneproject-app
+    env_file:
+      - .env
     environment:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - MILVUS_HOST=milvus
       - MILVUS_PORT=19530
       - RAG_CATEGORY=life
@@ -286,8 +289,11 @@ services:
   nat-agent-savings:
     container_name: nat-agent-savings
     image: capstoneproject-app
+    env_file:
+      - .env
     environment:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - MILVUS_HOST=milvus
       - MILVUS_PORT=19530
       - RAG_CATEGORY=savings
@@ -312,8 +318,11 @@ services:
   nat-agent-medical:
     container_name: nat-agent-medical
     image: capstoneproject-app
+    env_file:
+      - .env
     environment:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - MILVUS_HOST=milvus
       - MILVUS_PORT=19530
       - RAG_CATEGORY=medical
@@ -338,8 +347,11 @@ services:
   nat-agent-critical:
     container_name: nat-agent-critical
     image: capstoneproject-app
+    env_file:
+      - .env
     environment:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - MILVUS_HOST=milvus
       - MILVUS_PORT=19530
       - RAG_CATEGORY=critical
@@ -364,6 +376,8 @@ services:
   nat-orchestrator:
     container_name: nat-orchestrator
     image: capstoneproject-app
+    env_file:
+      - .env
     environment:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
@@ -395,7 +409,7 @@ services:
 
   # -----------------------------------------------------------------------
   # NeMo Agent Toolkit UI（官方前端，替代旧 frontend 服务）
-  # 访问地址：http://localhost:14000（4000 常落在 Windows/Hyper-V 保留端口段 3962–4061 内，故改用 14000）
+  # 访问地址：http://localhost:14000
   # 后端：nat-orchestrator:8100（多 Agent RAG 系统）
   # -----------------------------------------------------------------------
   nat-ui:

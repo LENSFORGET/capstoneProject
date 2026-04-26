@@ -52,32 +52,17 @@ if (-not (Test-Path $venvPath)) {
     Write-Host "`n[4/5] 虚拟环境已存在: .venv-xhs" -ForegroundColor Green
 }
 
-# 激活虚拟环境并安装依赖
+# 激活虚拟环境并安装非 NAT 依赖
 $activateScript = Join-Path $venvPath "Scripts\Activate.ps1"
 if (-not (Test-Path $activateScript)) {
     $activateScript = Join-Path $venvPath "bin/activate"
 }
 & $activateScript
 
-# 5. 安装 Python 依赖
-Write-Host "`n[5/5] 安装 Python 依赖..." -ForegroundColor Yellow
+# 5. 安装 Python 依赖（不安装本地 NAT editable 包，避免干扰 Anaconda NAT）
+Write-Host "`n[5/5] 安装 Python 依赖（跳过本地 NAT 包）..." -ForegroundColor Yellow
 & "$(Join-Path $venvPath 'Scripts\python.exe')" -m pip install --upgrade pip -q 2>$null
 pip install -r requirements-xhs-local.txt -q
-
-# 安装 NAT 包（editable，需版本变量；依赖包用 --no-deps 避免从 PyPI 拉取冲突版本）
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_CORE = "0.0.1"
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_MCP = "0.0.1"
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_FASTMCP = "0.0.1"
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_LLAMA_INDEX = "0.0.1"
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_LANGCHAIN = "0.0.1"
-
-$packagesDir = Join-Path $ProjectRoot "packages"
-# 先安装 core（--no-cache-dir 避免 pip 缓存权限问题），再安装依赖它的包（--no-deps 使用已安装的 core）
-pip install -e (Join-Path $packagesDir "nvidia_nat_core") --no-cache-dir -q
-pip install --no-deps -e (Join-Path $packagesDir "nvidia_nat_mcp") -q
-pip install --no-deps -e (Join-Path $packagesDir "nvidia_nat_fastmcp") -q
-pip install --no-deps -e (Join-Path $packagesDir "nvidia_nat_llama_index") -q
-pip install --no-deps -e (Join-Path $packagesDir "nvidia_nat_langchain") -q
 
 Write-Host "  Python 依赖已安装" -ForegroundColor Green
 
@@ -95,7 +80,7 @@ Write-Host @"
 1. 确保 PostgreSQL 已运行（端口 5432），并执行 xhs_db_init.sql 初始化数据库
 2. 设置环境变量: `$env:NVIDIA_API_KEY = "你的API密钥"
 3. 登录小红书: .\scripts\xhs_login_local.ps1
-4. 运行采集: nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
+4. 运行采集: .\scripts\run-xhs-scraper.ps1
 
 详见 docs\xhs-local-setup.md
 "@ -ForegroundColor Gray

@@ -32,7 +32,6 @@ llms:
     _type: openai
     model_name: qwen-plus
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    api_key: $DASHSCOPE_API_KEY
     temperature: 0.2
 
 workflow:
@@ -51,4 +50,4 @@ workflow:
 
     請先呼叫 search_insurance 工具（category="critical"）檢索相關產品資料，再作答。
     只回答危疾/綜合保障相關問題，其他險種請告知超出專業範圍。
-    使用繁體中文（香港）回答，結尾提醒「具體方案請諮詢宏利持牌保險顧問」。
+    跟隨用戶提問語言回答；用戶用英文提問時使用英文回答，用戶用中文提問時使用繁體中文（香港）。結尾提醒「具體方案請諮詢宏利持牌保險顧問」。

@@ -18,19 +18,13 @@ $env:XHS_STATE_PATH = $statePath
 Write-Host "=== 小红书登录助手（本地模式） ===" -ForegroundColor Cyan
 Write-Host "会话将保存至: $statePath`n" -ForegroundColor Gray
 
-# 尝试激活虚拟环境（若存在）
-$venvActivate = Join-Path $ProjectRoot ".venv-xhs\Scripts\Activate.ps1"
-if (Test-Path $venvActivate) {
-    & $venvActivate
-}
-
-# 运行登录助手
+# 运行登录助手（使用当前环境 Python，避免本地 NAT editable 包干扰 Anaconda）
 python xhs_login_helper.py
 $exitCode = $LASTEXITCODE
 
 if ($exitCode -eq 0) {
     Write-Host "`n登录完成。运行采集命令：" -ForegroundColor Green
-    Write-Host '  nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"' -ForegroundColor Gray
+    Write-Host '  .\scripts\run-xhs-scraper.ps1' -ForegroundColor Gray
 }
 
 exit $exitCode

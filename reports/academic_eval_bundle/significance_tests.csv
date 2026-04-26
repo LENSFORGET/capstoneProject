@@ -1,0 +1,6 @@
+variant,metric,mean,ci95_low,ci95_high,delta_vs_baseline,p_value_vs_baseline,effect_size_d,significant_0_05
+B0,overall_score,0.812333,0.806667,0.821,0.0,,,
+A1_no_rerank,overall_score,0.775667,0.771667,0.781,-0.036667,0.242551,-12.701706,no
+A2_no_category_filter,overall_score,0.751667,0.748667,0.755,-0.060667,0.242551,-13.134719,no
+A3_topk3,overall_score,0.745,0.742,0.748,-0.067333,0.242551,-13.649895,no
+A4_no_recovery,overall_score,0.773667,0.770667,0.777,-0.038667,0.242551,-7.020639,no

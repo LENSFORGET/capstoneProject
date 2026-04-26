@@ -21,13 +21,6 @@ if (Test-Path $envFile) {
     }
 }
 
-$venvActivate = Join-Path $ProjectRoot ".venv-xhs\Scripts\Activate.ps1"
-if (-not (Test-Path $venvActivate)) {
-    Write-Host "请先运行 .\scripts\setup-xhs-local.ps1 完成环境配置" -ForegroundColor Red
-    exit 1
-}
-& $venvActivate
-
 if (-not $env:NVIDIA_API_KEY) {
     Write-Host "请设置 NVIDIA_API_KEY 或在 .env 中配置" -ForegroundColor Yellow
     exit 1
@@ -38,5 +31,5 @@ if (-not $env:POSTGRES_PORT) { $env:POSTGRES_PORT = "15432" }
 $env:POSTGRES_HOST = "localhost"
 Write-Host "Postgres: $env:POSTGRES_HOST`:$env:POSTGRES_PORT" -ForegroundColor Gray
 
-Write-Host "启动小红书采集（项目根: $ProjectRoot）..." -ForegroundColor Cyan
+Write-Host "启动小红书采集（项目根: $ProjectRoot，使用当前环境 NAT）..." -ForegroundColor Cyan
 nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"

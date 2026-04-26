@@ -15,7 +15,7 @@ Docker 模式：
 
 运行方式：
   Docker: docker-compose --profile login up xhs-login --build
-  本地:   设置 XHS_STATE_PATH 后运行 python xhs_login_helper.py，或使用 scripts\\xhs_login_local.ps1
+  本地:   使用 scripts\\xhs_login_local.ps1（沿用当前 Anaconda / Shell 环境）
 """
 
 import os
@@ -216,7 +216,7 @@ def main() -> int:
     if os.path.exists("/.dockerenv"):
         print('  docker exec -it nat-app bash -c "nat run --config_file workflow_scraper.yaml --input \'请现在开始执行采集任务。\'"')
     else:
-        print('  nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"')
+        print(r"  .\scripts\run-xhs-scraper.ps1")
     print()
 
     return 0

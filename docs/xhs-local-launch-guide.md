@@ -99,19 +99,9 @@ pip install -r requirements-xhs-local.txt
 
 # 安装 aiorwlock（若仍报错）
 pip install aiorwlock~=1.5
-
-# 安装 NAT 包（设置版本变量后执行）
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_CORE = "0.0.1"
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_MCP = "0.0.1"
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_FASTMCP = "0.0.1"
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_LLAMA_INDEX = "0.0.1"
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_LANGCHAIN = "0.0.1"
-pip install -e packages/nvidia_nat_core --no-cache-dir
-pip install --no-deps -e packages/nvidia_nat_mcp
-pip install --no-deps -e packages/nvidia_nat_fastmcp
-pip install --no-deps -e packages/nvidia_nat_llama_index
-pip install --no-deps -e packages/nvidia_nat_langchain
 ```
+
+本地模式不再安装 `packages/` 下的 editable NAT 包。NAT 由当前 Anaconda 环境提供，避免本地包与 Anaconda 依赖互相干扰。
 
 ---
 
@@ -162,12 +152,7 @@ cd c:\Dev\capstoneProject
 .\scripts\run-xhs-scraper.ps1
 ```
 
-或在激活虚拟环境后手动运行：
-
-```powershell
-.\.venv-xhs\Scripts\Activate.ps1
-nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
-```
+建议统一使用 `.\scripts\run-xhs-scraper.ps1`，该脚本会在项目根目录加载环境变量，并沿用当前 Anaconda / Shell 环境中的 NAT。
 
 ---
 

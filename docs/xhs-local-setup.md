@@ -111,19 +111,7 @@ $env:NVIDIA_API_KEY = "你的API密钥"
 本地模式使用 Chromium 直接显示窗口，无需 noVNC。
 
 ```powershell
-# 确保在项目根目录，并已激活虚拟环境
-.\.venv-xhs\Scripts\Activate.ps1
-
-# 设置会话文件路径（可选，默认 ./data/xhs_state.json）
-$env:XHS_STATE_PATH = (Join-Path $PWD "data\xhs_state.json")
-
-# 运行登录助手
-python xhs_login_helper.py
-```
-
-或使用封装脚本：
-
-```powershell
+# 使用项目封装脚本，沿用当前 Anaconda / Shell 环境
 .\scripts\xhs_login_local.ps1
 ```
 
@@ -146,14 +134,8 @@ python xhs_login_helper.py
 确保在**项目根目录**执行（MCP 脚本通过相对路径查找）：
 
 ```powershell
-# 激活虚拟环境
-.\.venv-xhs\Scripts\Activate.ps1
-
-# 设置 API 密钥
-$env:NVIDIA_API_KEY = "你的API密钥"
-
-# 运行采集
-nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集任务。"
+# 使用项目封装脚本，沿用当前 Anaconda / Shell 环境中的 NAT
+.\scripts\run-xhs-scraper.ps1
 ```
 
 ---
@@ -177,19 +159,7 @@ nat run --config_file workflow_scraper.yaml --input "请现在开始执行采集
 
 ### MCP 脚本找不到
 
-必须从项目根目录执行 `nat run`，否则 `agent_browser_mcp.py` 和 `xhs_db_mcp.py` 无法被正确加载。
-
-### NAT 包安装失败（setuptools-scm）
-
-需设置版本环境变量，`setup-xhs-local.ps1` 已自动处理。手动安装时：
-
-```powershell
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_CORE = "0.0.1"
-$env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_MCP = "0.0.1"
-# ... 其他 NAT 包同理
-pip install -e packages/nvidia_nat_core
-# ...
-```
+必须从项目根目录执行采集命令，否则 `agent_browser_mcp.py` 和 `xhs_db_mcp.py` 无法被正确加载。本地模式不再安装 `packages/` 下的 editable NAT 包，NAT 由当前 Anaconda 环境提供，避免双版本互相干扰。
 
 ---
 
@@ -200,6 +170,6 @@ pip install -e packages/nvidia_nat_core
 | 登录 | noVNC (http://localhost:6080) | Chromium 直接窗口 |
 | 会话路径 | `/app/data/xhs_state.json` | `./data/xhs_state.json` |
 | 触发保存 | `docker exec xhs-login touch ...` | `New-Item -Path ... -ItemType File` |
-| 采集命令 | `docker exec -it nat-app bash -c "nat run ..."` | `nat run ...` |
+| 采集命令 | `docker exec -it nat-app bash -c "nat run ..."` | `.\scripts\run-xhs-scraper.ps1` |
 
 本地模式与 Docker 模式共用同一套 `agent_browser_mcp.py`、`xhs_db_mcp.py`、`workflow_scraper.yaml`，通过环境变量 `XHS_STATE_PATH` 和 `POSTGRES_HOST` 等区分运行环境。

@@ -124,8 +124,8 @@ def _apply_label(message_id: str, label_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _list_unread_messages() -> list[dict]:
-    """返回收件箱中未读且未被 AI 处理的邮件列表（仅含 id、threadId）。"""
-    query = f"is:unread -label:{PROCESSED_LABEL_NAME} in:inbox"
+    """返回收件箱中未被 AI 处理的邮件列表（仅含 id、threadId）。"""
+    query = f"-label:{PROCESSED_LABEL_NAME} in:inbox"
     try:
         data = _run_gws(
             "gmail", "users", "messages", "list",

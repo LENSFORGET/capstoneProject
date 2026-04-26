@@ -1,0 +1,9 @@
+{
+  "input_csv": "baseline_ablation_runs_pilot.csv",
+  "baseline": "B0",
+  "metric": "overall_score",
+  "bootstrap_b": 1000,
+  "permutation_b": 5000,
+  "random_seed": 20260424,
+  "note": "pilot run in consolidated single-folder bundle"
+}

@@ -1,1 +1,0 @@
-{"role":"assistant","message":{"content":[{"type":"text","text":"现在完整重写 `ui.py`，一次性完成 todos 2-5（i18n + 后端函数 + KB Tab 重设计 + 语言切换）："}]}}
