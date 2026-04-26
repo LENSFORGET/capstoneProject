@@ -1,18 +1,18 @@
 # --------------------------------------------------------------------------------------
-# 使用 Python 3.11 (Debian Bookworm) 作为基础镜像，满足 nvidia-nat-core 的要求 (>=3.11)
+# Use Python 3.11 (Debian Bookworm) as base image to meet nvidia-nat-core requirements (>=3.11)
 FROM python:3.11-bookworm
 
-# 设置环境变量，确保 Python 行为符合预期
+# Set environment variables to ensure predictable Python behavior
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive
 
-# 设置工作目录
+# Set working directory
 WORKDIR /app
 
 # --------------------------------------------------------------------------------------
-# 1. 安装系统依赖 (Node.js, 浏览器依赖)
-# 这些库是 Chromium/Agent-Browser 运行所需的
+# 1. Install system dependencies (Node.js, browser dependencies)
+# These libraries are required for Chromium/Agent-Browser to run
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gnupg \
@@ -37,31 +37,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------------------------------------------
-# 2. 安装 Node.js (v20 LTS)
+# 2. Install Node.js (v20 LTS)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && npm install -g npm@latest
 
 # --------------------------------------------------------------------------------------
-# 3. 安装 agent-browser
-# 全局安装，方便通过命令行调用
+# 3. Install agent-browser
+# Install globally for easy command-line access
 RUN npm install -g agent-browser
 
-# 初始化 agent-browser (这通常会安装 Playwright 浏览器二进制)
-# 如果失败，可能需要手动运行 install
+# Initialize agent-browser (this usually installs Playwright browser binaries)
+# If it fails, manual installation might be required
 RUN npx playwright install-deps chromium && npx playwright install chromium || echo "Playwright dependencies may need manual installation"
 
 # --------------------------------------------------------------------------------------
-# 4. 设置 Python 环境和依赖
-# 升级 pip
+# 4. Setup Python environment and dependencies
+# Upgrade pip
 RUN pip install --no-cache-dir "pip>=23.0"
 
-# 复制本地 packages 目录 (假设构建上下文包含此目录)
+# Copy local packages directory (assuming build context includes this directory)
 COPY packages /app/packages
 
-# 安装 nvidia-nat 包 (以 editable 模式，方便调试)
-# 使用 --no-deps 避免它自动升级 numpy，手动管理依赖
-# 修复 setuptools-scm 无法检测版本的问题
+# Install nvidia-nat packages (in editable mode for easy debugging)
+# Use --no-deps to prevent automatic numpy upgrades, managing dependencies manually
+# Fix setuptools-scm failing to detect versions
 ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_CORE=0.0.1 \
     SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_MCP=0.0.1 \
     SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_NAT_FASTMCP=0.0.1 \
@@ -75,7 +75,7 @@ RUN pip install --no-cache-dir -e /app/packages/nvidia_nat_core \
     && pip install --no-cache-dir -e /app/packages/nvidia_nat_llama_index \
     && pip install --no-deps -e /app/packages/nvidia_nat_langchain
 
-# 安装 MCP、RAG、数据库及基础依赖
+# Install MCP, RAG, database, and base dependencies
 RUN pip install --no-cache-dir \
     "mcp[cli]" \
     "uv" \
@@ -89,29 +89,29 @@ RUN pip install --no-cache-dir \
     "uvicorn" \
     "python-multipart"
 
-# 安装测试框架（pytest + asyncio 支持）
+# Install testing framework (pytest + asyncio support)
 RUN pip install --no-cache-dir \
     "pytest>=8.0" \
     "pytest-asyncio>=0.23"
 
 # --------------------------------------------------------------------------------------
-# 安装 MinerU（主要 PDF 解析引擎：文本 + 表格 + 图片）
-# 使用 pipeline 后端（纯 CPU，无需 GPU，兼容性最佳）
-# mineru[all] 包含所有可选后端；pipeline 是 CPU 模式
+# Install MinerU (Primary PDF parsing engine: text + tables + images)
+# Use pipeline backend (pure CPU, no GPU required, best compatibility)
+# mineru[all] includes all optional backends; pipeline is CPU mode
 RUN pip install --no-cache-dir "mineru[all]"
 
-# 配置 MinerU 模型目录（持久化到 Docker volume，避免重复下载）
+# Configure MinerU model directory (persist to Docker volume to avoid re-downloading)
 ENV MINERU_MODEL_DIR=/app/data/mineru_models \
     MINERU_DEVICE_MODE=cpu
 
-# 预创建模型目录
+# Pre-create model directory
 RUN mkdir -p /app/data/mineru_models
 
-# 验证 MinerU 安装（单行，避免 BuildKit 多行解析问题）
+# Verify MinerU installation (single line to avoid BuildKit multi-line parsing issues)
 RUN python -c "import mineru; print('MinerU version:', mineru.__version__)" 2>/dev/null || echo "MinerU will initialize on first use"
 
 # --------------------------------------------------------------------------------------
-# 5. 复制应用代码
+# 5. Copy application code
 COPY agent_browser_mcp.py /app/
 COPY workflow_browser.yaml /app/
 COPY workflow_scraper.yaml /app/
@@ -122,27 +122,27 @@ COPY xhs_db_mcp.py /app/
 COPY xhs_db_init.sql /app/
 COPY ui.py /app/
 
-# 多 Agent 系统 Workflow 文件
+# Multi-Agent System Workflow files
 COPY workflow_orchestrator.yaml /app/
 COPY workflow_agent_life.yaml /app/
 COPY workflow_agent_savings.yaml /app/
 COPY workflow_agent_medical.yaml /app/
 COPY workflow_agent_critical.yaml /app/
 
-# UI 依赖（Gradio + OpenAI 兼容接口）
+# UI dependencies (Gradio + OpenAI compatible interface)
 RUN pip install --no-cache-dir "gradio>=4.0" "openai>=1.0"
 
-# 复制保险产品手册 PDF 目录（多产品 RAG 知识源）
-# 注意：docker-compose 中通过 volume mount ./PDF:/app/PDF:ro 使用
+# Copy insurance product manual PDF directory (multi-product RAG knowledge source)
+# Note: Used via volume mount ./PDF:/app/PDF:ro in docker-compose
 RUN mkdir -p /app/PDF
 
-# 确保数据目录存在（mineru 输出、向量数据、洞察报告）
+# Ensure data directories exist (mineru output, vector data, insight reports)
 RUN mkdir -p /app/data/mineru_output /app/data/mineru_models
 
-# 6. (已移除) 修正 Windows 特有的命令
-# 脚本已修改为跨平台，无需 sed 替换
+# 6. (Removed) Fix Windows-specific commands
+# Scripts have been modified to be cross-platform, no need for sed replacement
 # RUN sed -i 's/agent-browser.cmd/agent-browser/g' /app/agent_browser_mcp.py
 
-# 7. 设置入口点
-# 默认进入 bash，方便调试和运行命令
+# 7. Set entrypoint
+# Default to bash for easy debugging and command execution
 CMD ["/bin/bash"]

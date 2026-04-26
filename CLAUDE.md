@@ -8,7 +8,7 @@ This is a capstone project: **宏利保险 AI 智能顾问系统** (Manulife HK 
 built on NVIDIA NeMo Agent Toolkit (NAT).
 
 The system provides an AI-powered insurance Q&A service backed by:
-- **33 official Manulife HK product PDFs** (2,438 semantic chunks in Milvus)
+- **32 official Manulife HK product PDFs** (semantic chunks in Milvus)
 - **qwen-plus** LLM via Alibaba Cloud Bailian (DashScope) for generation
 - **NVIDIA NIM nv-embedqa-e5-v5** for vector embeddings
 - **NeMo Agent Toolkit UI** as the chat frontend
@@ -21,7 +21,7 @@ User → nat-ui (port 14000) → nat-orchestrator (port 8100)
                                rag_mcp.py (FastMCP, stdio)
                                     ↓  category-aware vector search
                                Milvus insurance_docs collection
-                               (33 PDFs, 2438 chunks, 1024-dim vectors)
+                               (32 PDFs, 1024-dim vectors)
 ```
 
 ### Docker Services

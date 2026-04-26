@@ -1,0 +1,46 @@
+# -----------------------------------------------------------------------
+# Manulife Insurance AI Advisor - Local Deployment Requirements
+# 
+# NOTE: We strongly recommend using Docker (`docker-compose up -d`) 
+# for deployment, as it automatically handles complex dependencies 
+# including Milvus, PostgreSQL, Node.js, and Playwright.
+#
+# If you choose to run locally without Docker, install these dependencies:
+# -----------------------------------------------------------------------
+
+# Core Dependencies
+mcp[cli]>=1.0
+uv
+requests
+pymilvus~=2.5
+llama-index-embeddings-nvidia
+langchain-core
+pypdf>=4.0
+psycopg2-binary>=2.9
+fastapi
+uvicorn
+python-multipart
+
+# MinerU for PDF parsing (CPU mode recommended for compatibility)
+mineru[all]
+
+# UI and LLM Integrations
+gradio>=4.0
+openai>=1.0
+
+# Testing Framework
+pytest>=8.0
+pytest-asyncio>=0.23
+
+# -----------------------------------------------------------------------
+# IMPORTANT: NVIDIA NeMo Agent Toolkit (NAT) Packages
+# -----------------------------------------------------------------------
+# The core framework relies on specific local packages locked at v0.0.1.
+# You MUST install them manually in editable mode from the `packages/` directory:
+#
+# pip install -e packages/nvidia_nat_core
+# pip install -e packages/nvidia_nat_mcp
+# pip install -e packages/nvidia_nat_fastmcp
+# pip install -e packages/nvidia_nat_llama_index
+# pip install --no-deps -e packages/nvidia_nat_langchain
+# -----------------------------------------------------------------------
