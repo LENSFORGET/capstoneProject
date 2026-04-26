@@ -1,17 +1,17 @@
-# Baseline 与消融统计结果（Pilot）
+# Baseline and Ablation Statistics Results (Pilot)
 
-## 1. 说明
-- 本次为方法验证性质的 `pilot` 运行。
-- 目的：验证“基线-消融-显著性”流程可执行，不作为最终论文主结果。
+## 1. Description
+- This is a `pilot` run for methodology validation.
+- Purpose: Validate the "baseline-ablation-significance" pipeline is executable, not intended as the final thesis conclusion.
 
-## 2. 执行命令
+## 2. Execution Command
 - `python reports/academic_eval_bundle/run_baseline_ablation_stats.py`
 
-## 3. 输出文件
+## 3. Output Files
 - `significance_tests.csv`
 - `run_metadata.json`
 
-## 4. 关键结果（metric: overall_score）
+## 4. Key Results (metric: overall_score)
 | variant | mean | 95% CI | delta vs B0 | p-value | significant |
 |---|---:|---|---:|---:|---|
 | B0 | 0.8123 | [0.8067, 0.8210] | 0.0000 | - | - |
@@ -20,7 +20,7 @@
 | A3_topk3 | 0.7450 | [0.7420, 0.7480] | -0.0673 | 0.2426 | no |
 | A4_no_recovery | 0.7737 | [0.7707, 0.7770] | -0.0387 | 0.2426 | no |
 
-## 5. 解释
-- 该 pilot 中所有消融配置均值都低于基线 B0，趋势上支持“关键组件有效”。
-- 但每组仅 3 个 seed，统计功效不足，`p-value` 未达到显著性阈值。
-- 要形成论文主结论，需要扩大样本量和运行次数。
+## 5. Interpretation
+- In this pilot, all ablation configurations have lower means than the baseline B0, supporting the trend that "key components are effective".
+- However, with only 3 seeds per group, statistical power is insufficient, and `p-value` does not reach the significance threshold.
+- To form the main thesis conclusion, sample size and run iterations need to be expanded.

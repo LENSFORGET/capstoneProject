@@ -1,17 +1,17 @@
-# 误差分析模板（RAG + Agent）
+# Error Analysis Template (RAG + Agent)
 
-## 1. 失败类型 taxonomy
-| ErrorCode | 类别 | 定义 | 典型症状 |
+## 1. Failure Type Taxonomy
+| ErrorCode | Category | Definition | Typical Symptoms |
 |---|---|---|---|
-| E1 | RetrievalMiss | 关键证据未被召回 | 回答泛化、缺关键条款 |
-| E2 | RetrievalRank | 证据召回但排序靠后 | 回答引用弱相关片段 |
-| E3 | Hallucination | 回答包含证据外事实 | 出现条款外数字/断言 |
-| E4 | ToolMisuse | 工具或参数选择错误 | 调用无关工具、参数缺失 |
-| E5 | Looping | 轨迹重复无进展 | 连续相同 action |
-| E6 | RecoveryFail | 异常后未恢复 | 超时后直接失败 |
-| E7 | UnsafeAnswer | 应拒答却给出建议 | 高风险场景错误建议 |
+| E1 | RetrievalMiss | Key evidence not retrieved | Generalized answer, missing key terms |
+| E2 | RetrievalRank | Evidence retrieved but ranked low | Answer cites weakly relevant snippets |
+| E3 | Hallucination | Answer includes facts outside evidence | Numbers/assertions not in terms |
+| E4 | ToolMisuse | Incorrect tool or parameter selection | Calling irrelevant tools, missing parameters |
+| E5 | Looping | Trajectory repeats without progress | Consecutive identical actions |
+| E6 | RecoveryFail | Failed to recover after exception | Fails directly after timeout |
+| E7 | UnsafeAnswer | Gave advice when it should have refused | Incorrect advice in high-risk scenario |
 
-## 2. 个案记录表
+## 2. Case Record Table
 | item_id | variant | error_code | observed_output | root_cause | fix_hypothesis | priority |
 |---|---|---|---|---|---|---|
 |  |  |  |  |  |  |  |
